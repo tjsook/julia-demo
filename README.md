@@ -4,6 +4,7 @@ A consolidation repo for the Hemut Diesel dashboard program and HubSpot workflow
 
 ## Docs
 
+- [Stack Overview](./STACK.md)
 - [Architecture](./ARCHITECTURE.md)
 - [Phased Delivery Plan](./PHASES.md)
 - [Data Contracts and Decisions](./DATA-CONTRACTS.md)
