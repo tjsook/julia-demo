@@ -1,6 +1,6 @@
-# diesel-dashboard
+# diesel-dashboard-backend
 
-A consolidation repo for the Hemut Diesel dashboard program and HubSpot workflow system.
+Backend service for the Hemut Diesel dashboard program. This repo owns EDS polling, HubSpot server-side integrations, scheduled jobs, raw and normalized data ingestion into Supabase, and the backend APIs that power the dashboard system.
 
 ## Docs
 
