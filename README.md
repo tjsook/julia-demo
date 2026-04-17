@@ -161,11 +161,11 @@ backfills; they override `window_days`.
 
 | Endpoint | Schedule | Strategy |
 |---|---|---|
-| `/internal/jobs/ping` | every 5 min | Liveness — alert on 5xx / 401 |
-| `/internal/jobs/poll-transactions` | every 10 min | Rolling 3-day window; upserts by `transactionID`. Catches back-dated postings. |
-| `/internal/jobs/poll-accounts` | every hour | Full dump; upsert by `accountToken` |
-| `/internal/jobs/poll-drivers` | every hour | Full dump; upsert by `driverToken` |
-| `/internal/jobs/poll-documents` | every 6 hours | Full dump; upsert by `docToken` |
+| `/internal/jobs/ping` | every 3 hours | Liveness — alert on 5xx / 401 |
+| `/internal/jobs/poll-transactions` | every 3 hours | Rolling 3-day window; upserts by `transactionID`. Catches back-dated postings. |
+| `/internal/jobs/poll-accounts` | every 3 hours | Full dump; upsert by `accountToken` |
+| `/internal/jobs/poll-drivers` | every 3 hours | Full dump; upsert by `driverToken` |
+| `/internal/jobs/poll-documents` | every 3 hours | Full dump; upsert by `docToken` |
 
 Detail endpoints (`/getAccount/{token}`, `/getDriver/{token}`,
 `/getDocument/{token}`) are **not** polled on a schedule. Call them
