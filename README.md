@@ -119,7 +119,7 @@ tests/
 
 This repo is being reworked toward a single Vercel project rooted at `/`.
 
-- Next.js frontend lives at `src/app`
+- Next.js frontend lives under `pages/` and `styles/`
 - Python backend entrypoints live under `api/`
 - The existing FastAPI application code remains under `app/`
 
