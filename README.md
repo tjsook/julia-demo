@@ -1,19 +1,21 @@
-# diesel-dashboard-backend
+# diesel-dashboard
 
-Backend service for the Hemut Diesel dashboard. Owns server-side integrations
-(EDS, HubSpot), scheduled polling jobs, ingestion into Supabase, and the APIs
-that power the dashboard.
+Hemut Diesel dashboard application repository. It now contains both the
+frontend shell and the Python backend that powers integrations, polling jobs,
+ingestion into Supabase, and API endpoints.
 
 ---
 
 ## Overview
 
-FastAPI monolith. One process, one repo, one `app/` package. Deploys as a
-single container on **Google Cloud Run**, with **Cloud Scheduler** triggering
-the polling endpoints on a schedule.
+One repository, one Vercel project target:
 
-The repo now also includes a minimal root-level Next.js shell so frontend work
-can begin in-place inside a single Vercel project.
+- Next.js frontend served from `/`
+- FastAPI backend served from `/api/*`
+- Supabase as the system of record
+
+External scheduling infrastructure can still call the backend's internal job
+endpoints when needed.
 
 ---
 
@@ -43,7 +45,7 @@ Run `migrations/001_eds_polling.sql` in the Supabase SQL editor, or:
 psql "$SUPABASE_DB_URL" -f migrations/001_eds_polling.sql
 ```
 
-### Run locally
+### Run the backend locally
 ```bash
 uvicorn app.main:app --reload --port 8000
 ```
@@ -135,17 +137,17 @@ In the deployed single-project Vercel shape, backend routes are exposed under
 Data flow for a polling job:
 
 ```
-Cloud Scheduler --OIDC/secret--> FastAPI /internal/jobs/poll-*
-                                      |
-                                      v
-                            EDSPollService.poll_X()
-                               |            |
-                               v            v
-                         EDSClient     EDSRepo (Supabase)
-                               |            |
-                               v            v
-                         EDS REST API   eds_raw_*  +  normalized tables
-                                        + eds_raw_poll_runs (audit)
+External Scheduler --OIDC/secret--> Vercel /api/internal/jobs/poll-*
+                                           |
+                                           v
+                                 EDSPollService.poll_X()
+                                    |            |
+                                    v            v
+                              EDSClient     EDSRepo (Supabase)
+                                    |            |
+                                    v            v
+                              EDS REST API   eds_raw_*  +  normalized tables
+                                             + eds_raw_poll_runs (audit)
 ```
 
 ### Key decisions
@@ -153,7 +155,7 @@ Cloud Scheduler --OIDC/secret--> FastAPI /internal/jobs/poll-*
 | Decision | Why |
 |---|---|
 | Monolith, not microservices | One team, one deploy, one codebase. |
-| Poll from FastAPI on GCP (not `pg_cron`) | Polling logic is list-then-detail + rolling-window + line-item flattening + GeoJSON parsing. SQL is the wrong language for that; Python has retries, Pydantic, mocks, tests. |
+| Poll from FastAPI (not `pg_cron`) | Polling logic is list-then-detail + rolling-window + line-item flattening + GeoJSON parsing. SQL is the wrong language for that; Python has retries, Pydantic, mocks, tests. |
 | Raw `jsonb` layer + normalized tables | Decouples ingestion from schema evolution. If EDS adds a field, we already have it — normalize later, no re-poll. |
 | Cloud Scheduler + shared-secret OR OIDC | Two accepted credentials. Dev uses header token, prod uses Google-signed OIDC. |
 | `supabase-py` with service-role key | Backend-only writes bypass RLS. User-scoped reads (future) should use per-request anon client + user JWT. |
@@ -166,10 +168,10 @@ Cloud Scheduler --OIDC/secret--> FastAPI /internal/jobs/poll-*
 
 | Method | Path | Description |
 |---|---|---|
-| GET | `/` | Service info |
-| GET | `/health` | Liveness (no I/O) |
-| GET | `/ready` | Readiness (checks Supabase) |
-| POST | `/calculations/fuel-efficiency` | mpg (+ duration) for a trip |
+| GET | `/api` | Service info |
+| GET | `/api/health` | Liveness (no I/O) |
+| GET | `/api/ready` | Readiness (checks Supabase) |
+| POST | `/api/calculations/fuel-efficiency` | mpg (+ duration) for a trip |
 
 ### Internal (auth-gated, called by Cloud Scheduler)
 
@@ -178,11 +180,11 @@ secret) or a Google-signed OIDC ID token with audience `INTERNAL_JOB_OIDC_AUDIEN
 
 | Method | Path | Description |
 |---|---|---|
-| POST | `/internal/jobs/ping` | Validates EDS connectivity + partner info |
-| POST | `/internal/jobs/poll-accounts` | Full dump of `/getAccounts` -> accounts |
-| POST | `/internal/jobs/poll-drivers` | Full dump of `/getDrivers` -> drivers |
-| POST | `/internal/jobs/poll-transactions?window_days=3` | Rolling window -> transactions + line items |
-| POST | `/internal/jobs/poll-documents` | Full dump of `/getDocuments` -> documents |
+| POST | `/api/internal/jobs/ping` | Validates EDS connectivity + partner info |
+| POST | `/api/internal/jobs/poll-accounts` | Full dump of `/getAccounts` -> accounts |
+| POST | `/api/internal/jobs/poll-drivers` | Full dump of `/getDrivers` -> drivers |
+| POST | `/api/internal/jobs/poll-transactions?window_days=3` | Rolling window -> transactions + line items |
+| POST | `/api/internal/jobs/poll-documents` | Full dump of `/getDocuments` -> documents |
 
 For `poll-transactions`, `start_date` and `end_date` (ISO) can be passed for
 backfills; they override `window_days`.
@@ -193,11 +195,11 @@ backfills; they override `window_days`.
 
 | Endpoint | Schedule | Strategy |
 |---|---|---|
-| `/internal/jobs/ping` | every 3 hours | Liveness — alert on 5xx / 401 |
-| `/internal/jobs/poll-transactions` | every 3 hours | Rolling 3-day window; upserts by `transactionID`. Catches back-dated postings. |
-| `/internal/jobs/poll-accounts` | every 3 hours | Full dump; upsert by `accountToken` |
-| `/internal/jobs/poll-drivers` | every 3 hours | Full dump; upsert by `driverToken` |
-| `/internal/jobs/poll-documents` | every 3 hours | Full dump; upsert by `docToken` |
+| `/api/internal/jobs/ping` | every 3 hours | Liveness — alert on 5xx / 401 |
+| `/api/internal/jobs/poll-transactions` | every 3 hours | Rolling 3-day window; upserts by `transactionID`. Catches back-dated postings. |
+| `/api/internal/jobs/poll-accounts` | every 3 hours | Full dump; upsert by `accountToken` |
+| `/api/internal/jobs/poll-drivers` | every 3 hours | Full dump; upsert by `driverToken` |
+| `/api/internal/jobs/poll-documents` | every 3 hours | Full dump; upsert by `docToken` |
 
 Detail endpoints (`/getAccount/{token}`, `/getDriver/{token}`,
 `/getDocument/{token}`) are **not** polled on a schedule. Call them
@@ -208,23 +210,25 @@ on-demand — the `EDSClient` methods exist (`get_account`, `get_driver`,
 
 ## Cloud Scheduler setup (GCP)
 
+This remains a valid option if you want Google Cloud Scheduler to call the
+backend routes inside the Vercel-hosted app.
+
 Two options for auth:
 
 ### Option 1 — Shared secret (simplest)
 1. Set `INTERNAL_JOB_TOKEN` as a secret in **Google Secret Manager**, mount
-   it as an env var on Cloud Run.
+   it as an env var in the deployed application.
 2. In Cloud Scheduler, create an HTTP job:
    - **Target:** HTTP, `POST`
-   - **URL:** `https://<your-cloud-run-url>/internal/jobs/poll-transactions`
+   - **URL:** `https://<your-app-domain>/api/internal/jobs/poll-transactions`
    - **Auth header:** `Add header` → `Authorization: Bearer <INTERNAL_JOB_TOKEN>`
      *(Scheduler supports an "Auth header" field — use that, don't paste the secret in "body".)*
 
 ### Option 2 — Google OIDC (recommended for prod)
 1. Create a service account, e.g. `cloud-scheduler@PROJECT.iam.gserviceaccount.com`.
-2. Grant it `roles/run.invoker` on your Cloud Run service (Cloud Run will
-   verify the OIDC token at the edge *and* your app will verify it again).
+2. Configure the scheduler job to send an OIDC token for the backend target URL.
 3. Set on the backend:
-   - `INTERNAL_JOB_OIDC_AUDIENCE` = the Cloud Run service URL (or an explicit audience string).
+   - `INTERNAL_JOB_OIDC_AUDIENCE` = the deployed backend audience value, usually your app URL or an explicit audience string.
    - `INTERNAL_JOB_OIDC_SERVICE_ACCOUNT_EMAIL` = the scheduler SA email (optional — pins the caller).
 4. In Cloud Scheduler, create the job with **Auth → Add OIDC token**, pick the
    SA, and set the same audience.
@@ -235,7 +239,7 @@ gcloud scheduler jobs create http eds-poll-transactions \
   --location us-central1 \
   --schedule "*/10 * * * *" \
   --http-method POST \
-  --uri "https://diesel-backend-xxxx-uc.a.run.app/internal/jobs/poll-transactions" \
+  --uri "https://your-app-domain.vercel.app/api/internal/jobs/poll-transactions" \
   --headers "Authorization=Bearer ${INTERNAL_JOB_TOKEN}" \
   --attempt-deadline 540s
 ```
@@ -243,112 +247,46 @@ gcloud scheduler jobs create http eds-poll-transactions \
 ### Why not `pg_cron`?
 We considered running jobs inside Supabase via `pg_cron` + `pg_net`. The
 polling logic here has rolling windows, dedupe by id, line-item flattening,
-and GeoJSON parsing — all painful in PL/pgSQL. We're already running a
-backend on Cloud Run, so the marginal cost of a Cloud Scheduler trigger is
-zero. `pg_cron` is still the right tool for **Supabase-internal maintenance**
-(e.g., materialized-view refreshes, retention cleanup) — just not for
-calling external APIs.
+and GeoJSON parsing — all painful in PL/pgSQL. `pg_cron` is still the right
+tool for **Supabase-internal maintenance** (e.g., materialized-view refreshes,
+retention cleanup) — just not for calling external APIs.
 
 ---
 
-## CI/CD (GitHub Actions)
+## CI/CD
 
-Every push to `main`, `dev`, or `staging` — and every PR targeting those
-branches — runs the **Lint & Test** job. On merges to `main`, the **Build &
-Deploy** job additionally builds a Docker image, pushes it to Artifact
-Registry, and deploys it to Cloud Run.
+The target deployment flow for this repo is Vercel Git integration:
+
+- every pull request gets a Vercel preview deployment
+- every merge to `main` gets a production deployment
+- GitHub Actions remains useful for repo-level checks such as linting and tests
 
 ### Workflow overview
 
 ```
 PR / push
-  └─ ci: ruff check + pytest
-       └─ (main only) deploy:
-            build docker image → push to Artifact Registry → gcloud run deploy
+  └─ GitHub Actions: repo checks
+  └─ Vercel: preview deployment for PRs
+       └─ (main only) production deployment
 ```
 
-### One-time GCP setup
+### Vercel project setup
 
-```bash
-export PROJECT_ID=your-gcp-project-id
-export PROJECT_NUMBER=$(gcloud projects describe $PROJECT_ID --format='value(projectNumber)')
-export REGION=us-central1
-export SA=github-actions-deployer@$PROJECT_ID.iam.gserviceaccount.com
+1. Import this repository into Vercel as a single project rooted at `/`.
+2. Leave framework detection on Next.js defaults.
+3. Set production branch to `main`.
+4. Configure the required environment variables in Vercel for Preview and Production.
 
-# 1. Enable APIs
-gcloud services enable \
-  run.googleapis.com \
-  artifactregistry.googleapis.com \
-  iamcredentials.googleapis.com \
-  secretmanager.googleapis.com
-
-# 2. Create Artifact Registry repo
-gcloud artifacts repositories create diesel-dashboard \
-  --repository-format=docker \
-  --location=$REGION
-
-# 3. Create service account for GitHub Actions
-gcloud iam service-accounts create github-actions-deployer \
-  --display-name="GitHub Actions Deployer"
-
-# 4. Grant permissions
-gcloud projects add-iam-policy-binding $PROJECT_ID \
-  --member="serviceAccount:$SA" --role="roles/run.admin"
-
-gcloud projects add-iam-policy-binding $PROJECT_ID \
-  --member="serviceAccount:$SA" --role="roles/artifactregistry.writer"
-
-gcloud projects add-iam-policy-binding $PROJECT_ID \
-  --member="serviceAccount:$SA" --role="roles/secretmanager.secretAccessor"
-
-# Also allow the Cloud Run SA to act as itself (required for gcloud run deploy)
-gcloud iam service-accounts add-iam-policy-binding \
-  $PROJECT_NUMBER-compute@developer.gserviceaccount.com \
-  --member="serviceAccount:$SA" \
-  --role="roles/iam.serviceAccountUser"
-
-# 5. Set up Workload Identity Federation (keyless — no JSON key in GitHub)
-gcloud iam workload-identity-pools create "github-pool" --location="global"
-
-gcloud iam workload-identity-pools providers create-oidc "github-provider" \
-  --location="global" \
-  --workload-identity-pool="github-pool" \
-  --issuer-uri="https://token.actions.githubusercontent.com" \
-  --attribute-mapping="google.subject=assertion.sub,attribute.repository=assertion.repository"
-
-gcloud iam service-accounts add-iam-policy-binding $SA \
-  --role="roles/iam.workloadIdentityUser" \
-  --member="principalSet://iam.googleapis.com/projects/$PROJECT_NUMBER/locations/global/workloadIdentityPools/github-pool/attribute.repository/your-org/diesel-dashboard-backend"
-```
-
-The full WIF provider name (needed as a GitHub secret below) is:
-```
-projects/$PROJECT_NUMBER/locations/global/workloadIdentityPools/github-pool/providers/github-provider
-```
-
-### GitHub secrets to configure
-
-In **Settings → Secrets and variables → Actions**:
-
-| Secret | Value |
-|---|---|
-| `GCP_PROJECT_ID` | your GCP project ID |
-| `GCP_REGION` | e.g. `us-central1` |
-| `GCP_SERVICE_NAME` | e.g. `diesel-dashboard-backend` |
-| `GCP_WORKLOAD_IDENTITY_PROVIDER` | full WIF provider resource name (above) |
-| `GCP_SERVICE_ACCOUNT` | `github-actions-deployer@$PROJECT_ID.iam.gserviceaccount.com` |
-
-App secrets (`SUPABASE_*`, `EDS_API_BEARER_TOKEN`) **never go into GitHub** —
-they live in GCP Secret Manager and are mounted as env vars at Cloud Run
-deploy time via `--set-secrets`.
+App secrets (`SUPABASE_*`, `EDS_API_BEARER_TOKEN`, internal job auth values)
+should live in Vercel project environment variables, not in GitHub secrets.
 
 ### CORS
 
-Update `CORS_ORIGINS` in the `deploy` job inside
-`.github/workflows/deploy.yml` to include your production frontend domain:
+Set `CORS_ORIGINS` in the deployed environment to include your production app
+domain:
 
-```yaml
---set-env-vars APP_ENV=prod,LOG_LEVEL=INFO,APP_TIMEZONE=America/Los_Angeles,CORS_ORIGINS=https://your-frontend.com
+```bash
+CORS_ORIGINS=https://your-app-domain.vercel.app
 ```
 
 ---
