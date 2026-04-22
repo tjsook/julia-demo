@@ -119,6 +119,15 @@ This repo is being reworked toward a single Vercel project rooted at `/`.
 - Python backend entrypoints live under `api/`
 - The existing FastAPI application code remains under `app/`
 
+In the deployed single-project Vercel shape, backend routes are exposed under
+`/api/*`. For example:
+
+- `GET /api`
+- `GET /api/health`
+- `GET /api/ready`
+- `POST /api/calculations/fuel-efficiency`
+- `POST /api/internal/jobs/poll-transactions`
+
 Data flow for a polling job:
 
 ```
