@@ -33,6 +33,10 @@ cp .env.example .env
 # fill in SUPABASE_*, EDS_*, INTERNAL_JOB_TOKEN
 ```
 
+The backend reads both root `.env` and root `.env.local` during local
+development. If the same variable exists in both files, `.env.local` is the
+intended override layer.
+
 ### Apply the DB schema (once)
 Run `migrations/001_eds_polling.sql` in the Supabase SQL editor, or:
 ```bash
