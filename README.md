@@ -12,6 +12,9 @@ FastAPI monolith. One process, one repo, one `app/` package. Deploys as a
 single container on **Google Cloud Run**, with **Cloud Scheduler** triggering
 the polling endpoints on a schedule.
 
+The repo now also includes a minimal root-level Next.js shell so frontend work
+can begin in-place inside a single Vercel project.
+
 ---
 
 ## Runbook
@@ -42,6 +45,14 @@ uvicorn app.main:app --reload --port 8000
 ```
 - Health: `GET /health`  &nbsp;&nbsp;|  Readiness: `GET /ready`
 - OpenAPI docs: `http://localhost:8000/docs`
+
+### Run the frontend shell locally
+```bash
+npm install
+npm run dev
+```
+
+The frontend will be available at `http://localhost:3000`.
 
 ### Trigger a poll manually (dev)
 ```bash
@@ -99,6 +110,14 @@ migrations/
   001_eds_polling.sql           # Supabase schema (raw + normalized + poll_runs)
 tests/
 ```
+
+## Vercel project shape
+
+This repo is being reworked toward a single Vercel project rooted at `/`.
+
+- Next.js frontend lives at `src/app`
+- Python backend entrypoints live under `api/`
+- The existing FastAPI application code remains under `app/`
 
 Data flow for a polling job:
 
