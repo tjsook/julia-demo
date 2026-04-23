@@ -23,7 +23,13 @@ from app.core.config import get_settings
 from app.core.errors import register_exception_handlers
 from app.core.logging import configure_logging, get_logger
 from app.middleware.request_id import RequestIDMiddleware
-from app.routers import calculation_routes, fueling_routes, health_routes, internal_jobs, program_metrics_routes
+from app.routers import (
+    calculation_routes,
+    fueling_routes,
+    health_routes,
+    internal_jobs,
+    program_metrics_routes,
+)
 
 settings = get_settings()
 configure_logging(settings.LOG_LEVEL)
