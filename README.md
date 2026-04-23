@@ -28,32 +28,30 @@ endpoints when needed.
 
 ### Setup
 ```bash
-python -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
 cp .env.example .env
 # fill in SUPABASE_*, EDS_*, INTERNAL_JOB_TOKEN
 ```
 
-The backend reads both root `.env` and root `.env.local` during local
-development. If the same variable exists in both files, `.env.local` is the
-intended override layer.
-
 ### Apply the DB schema (once)
-Run `migrations/001_eds_polling.sql` in the Supabase SQL editor, or:
+Run `backend/migrations/001_eds_polling.sql` in the Supabase SQL editor, or:
 ```bash
-psql "$SUPABASE_DB_URL" -f migrations/001_eds_polling.sql
+psql "$SUPABASE_DB_URL" -f backend/migrations/001_eds_polling.sql
 ```
 
 ### Run the backend locally
 ```bash
+cd backend
+python -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
 uvicorn app.main:app --reload --port 8000
 ```
 - Health: `GET /health`  &nbsp;&nbsp;|  Readiness: `GET /ready`
 - OpenAPI docs: `http://localhost:8000/docs`
 
-### Run the frontend shell locally
+### Run the frontend locally
 ```bash
+cd frontend
 npm install
 npm run dev
 ```
@@ -76,6 +74,7 @@ curl -X POST http://localhost:8000/internal/jobs/poll-accounts \
 
 ### Tests
 ```bash
+cd backend
 pytest
 ```
 
