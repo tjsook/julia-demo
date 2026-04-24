@@ -45,7 +45,7 @@ async def lifespan(_: FastAPI):
 
 
 def create_app(*, root_path: str = "") -> FastAPI:
-    """Build the FastAPI application for local or Vercel-hosted entrypoints."""
+    """Build the FastAPI application for local or prefixed ASGI entrypoints."""
     application = FastAPI(
         title="Diesel Dashboard Backend",
         description="APIs + calculations for the Hemut Diesel dashboard.",

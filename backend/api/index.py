@@ -1,4 +1,4 @@
-"""Vercel entrypoint for the FastAPI backend under the `/api` prefix."""
+"""ASGI entrypoint shim for exposing the FastAPI backend under the `/api` prefix."""
 
 from app.main import create_app
 
