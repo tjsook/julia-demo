@@ -39,6 +39,10 @@ class Settings(BaseSettings):
     EDS_API_BEARER_TOKEN: str | None = None
     EDS_POLL_TRANSACTIONS_WINDOW_DAYS: int = 3
 
+    # HubSpot
+    HUBSPOT_API_BASE_URL: str = "https://api.hubapi.com"
+    HUBSPOT_PRIVATE_APP_TOKEN: str | None = None
+
     # Internal jobs auth (Cloud Scheduler -> /internal/jobs/*)
     INTERNAL_JOB_TOKEN: str | None = None
     INTERNAL_JOB_OIDC_AUDIENCE: str | None = None
