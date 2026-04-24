@@ -6,17 +6,26 @@ at startup. Secrets have no defaults — the app fails fast if they're missing.
 """
 
 from functools import lru_cache
+from pathlib import Path
 from typing import Literal
 
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+_BACKEND_DIR = Path(__file__).resolve().parents[2]
+_REPO_ROOT = _BACKEND_DIR.parent
 
 
 class Settings(BaseSettings):
     """Typed, validated settings loaded from environment / .env file."""
 
     model_config = SettingsConfigDict(
-        env_file=(".env", ".env.local"),
+        env_file=(
+            _REPO_ROOT / ".env",
+            _REPO_ROOT / ".env.local",
+            _BACKEND_DIR / ".env",
+            _BACKEND_DIR / ".env.local",
+        ),
         env_file_encoding="utf-8",
         case_sensitive=True,
         extra="ignore",
