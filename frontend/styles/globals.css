@@ -1,61 +1,34 @@
 :root {
-  color-scheme: light;
-  font-family: Arial, Helvetica, sans-serif;
-  background: #f4f1ea;
-  color: #1f1d1a;
+  --sidebar-bg: #0f172a;
+  --sidebar-width: 240px;
+  --main-bg: #f1f5f9;
+  --card-bg: #ffffff;
+  --border: #e2e8f0;
+  --text-primary: #0f172a;
+  --text-muted: #64748b;
+  --text-sidebar: rgba(255, 255, 255, 0.65);
+  --text-sidebar-active: #ffffff;
+  --accent-green: #22c55e;
+  --accent-blue: #3b82f6;
+  --accent-orange: #f97316;
+  --accent-red: #ef4444;
+  --accent-purple: #a855f7;
+  --hemut-gold: #f5c518;
+  font-family: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", sans-serif;
 }
 
-* {
+*,
+*::before,
+*::after {
   box-sizing: border-box;
+  margin: 0;
+  padding: 0;
 }
 
 html,
 body {
-  margin: 0;
-  min-height: 100%;
-}
-
-body {
-  min-height: 100vh;
-}
-
-.shell {
-  display: grid;
-  min-height: 100vh;
-  place-items: center;
-  padding: 24px;
-  background:
-    radial-gradient(circle at top, rgba(214, 163, 72, 0.18), transparent 40%),
-    linear-gradient(180deg, #f9f6ef 0%, #ece4d5 100%);
-}
-
-.shell__card {
-  width: min(100%, 720px);
-  padding: 48px;
-  border: 1px solid rgba(31, 29, 26, 0.12);
-  border-radius: 24px;
-  background: rgba(255, 252, 246, 0.9);
-  box-shadow: 0 24px 80px rgba(61, 45, 18, 0.08);
-}
-
-.shell__eyebrow {
-  margin: 0 0 12px;
-  font-size: 0.85rem;
-  font-weight: 700;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: #8d6b2d;
-}
-
-h1 {
-  margin: 0;
-  font-size: clamp(2.5rem, 8vw, 4.5rem);
-  line-height: 0.95;
-  letter-spacing: -0.04em;
-}
-
-@media (max-width: 640px) {
-  .shell__card {
-    padding: 32px 24px;
-  }
+  height: 100%;
+  background: var(--main-bg);
+  color: var(--text-primary);
+  -webkit-font-smoothing: antialiased;
 }
