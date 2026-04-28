@@ -28,6 +28,7 @@ from app.routers import (
     fueling_routes,
     health_routes,
     internal_jobs,
+    mapping_review_routes,
     program_metrics_routes,
 )
 
@@ -70,6 +71,7 @@ def create_app(*, root_path: str = "") -> FastAPI:
     application.include_router(internal_jobs.router)
     application.include_router(fueling_routes.router)
     application.include_router(program_metrics_routes.router)
+    application.include_router(mapping_review_routes.router)
     return application
 
 
