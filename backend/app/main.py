@@ -31,6 +31,7 @@ from app.routers import (
     mapping_review_routes,
     program_metrics_routes,
 )
+from app.routers.pipeline_health_routes import router as pipeline_health_router
 
 settings = get_settings()
 configure_logging(settings.LOG_LEVEL)
@@ -72,6 +73,7 @@ def create_app(*, root_path: str = "") -> FastAPI:
     application.include_router(fueling_routes.router)
     application.include_router(program_metrics_routes.router)
     application.include_router(mapping_review_routes.router)
+    application.include_router(pipeline_health_router)
     return application
 
 
