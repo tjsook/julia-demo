@@ -21,3 +21,6 @@ frontend/node_modules/
 .next/
 frontend/.next/
 coverage/
+
+# Personal
+planning-docs-private/
