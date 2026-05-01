@@ -69,3 +69,4 @@ class Settings(BaseSettings):
 def get_settings() -> Settings:
     """Singleton accessor — cached so the .env is only parsed once per process."""
     return Settings()  # type: ignore[call-arg]
+
