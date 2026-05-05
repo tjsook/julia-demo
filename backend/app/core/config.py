@@ -58,7 +58,7 @@ class Settings(BaseSettings):
     INTERNAL_JOB_OIDC_SERVICE_ACCOUNT_EMAIL: str | None = None
 
     # CORS
-    CORS_ORIGINS: str = "http://localhost:3000,http://127.0.0.1:3000"
+    CORS_ORIGINS: str = "http://localhost:3000,http://127.0.0.1:3000,https://dashboard.gethemutdiesel.com"
 
     @property
     def cors_origins_list(self) -> list[str]:
@@ -69,3 +69,4 @@ class Settings(BaseSettings):
 def get_settings() -> Settings:
     """Singleton accessor — cached so the .env is only parsed once per process."""
     return Settings()  # type: ignore[call-arg]
+
