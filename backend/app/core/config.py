@@ -51,6 +51,7 @@ class Settings(BaseSettings):
     # HubSpot
     HUBSPOT_API_BASE_URL: str = "https://api.hubapi.com"
     HUBSPOT_PRIVATE_APP_TOKEN: str | None = None
+    HUBSPOT_WEBHOOK_ENFORCE_SIGNATURE: bool = False
 
     # Internal jobs auth (Cloud Scheduler -> /internal/jobs/*)
     INTERNAL_JOB_TOKEN: str | None = None
@@ -60,13 +61,24 @@ class Settings(BaseSettings):
     # CORS
     CORS_ORIGINS: str = "http://localhost:3000,http://127.0.0.1:3000,https://dashboard.gethemutdiesel.com"
 
+    # Phase 2.6 Event Detection
+    EVENT_LAPSED_DAYS: int = 7
+    EVENT_SEVERE_LAPSED_DAYS: int = 14
+    EVENT_REP_STUCK_DEAL_THRESHOLD: int = 5
+    EVENT_REP_STUCK_STAGE_DAYS: int = 7
+    EVENT_REP_OVERDUE_TASK_THRESHOLD: int = 3
+    EVENT_PAPERWORK_STAGE_IDS: str = ""
+
     @property
     def cors_origins_list(self) -> list[str]:
         return [o.strip() for o in self.CORS_ORIGINS.split(",") if o.strip()]
+
+    @property
+    def paperwork_stage_ids(self) -> list[str]:
+        return [s.strip() for s in self.EVENT_PAPERWORK_STAGE_IDS.split(",") if s.strip()]
 
 
 @lru_cache(maxsize=1)
 def get_settings() -> Settings:
     """Singleton accessor — cached so the .env is only parsed once per process."""
     return Settings()  # type: ignore[call-arg]
-
