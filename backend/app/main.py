@@ -19,6 +19,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.clients.eds_client import close_eds_client
+from app.clients.slack_client import close_slack_client
 from app.core.config import get_settings
 from app.core.errors import register_exception_handlers
 from app.core.logging import configure_logging, get_logger
@@ -48,6 +49,7 @@ async def lifespan(_: FastAPI):
     yield
     logger.info("Shutting down — closing external clients")
     await close_eds_client()
+    await close_slack_client()
 
 
 def create_app(*, root_path: str = "") -> FastAPI:
