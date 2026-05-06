@@ -37,6 +37,7 @@ from app.routers.fueling_attribution_routes import router as fueling_attribution
 from app.routers.hubspot_webhooks import router as hubspot_webhook_router
 from app.routers.pipeline_health_routes import router as pipeline_health_router
 from app.routers.rep_performance_routes import router as rep_performance_router
+from app.routers.routing_audit_routes import router as routing_audit_router
 
 settings = get_settings()
 configure_logging(settings.LOG_LEVEL)
@@ -84,6 +85,7 @@ def create_app(*, root_path: str = "") -> FastAPI:
     application.include_router(rep_performance_router)
     application.include_router(fueling_attribution_router)
     application.include_router(event_router)
+    application.include_router(routing_audit_router)
     return application
 
 
