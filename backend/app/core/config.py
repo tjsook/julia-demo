@@ -69,6 +69,14 @@ class Settings(BaseSettings):
     EVENT_REP_OVERDUE_TASK_THRESHOLD: int = 3
     EVENT_PAPERWORK_STAGE_IDS: str = ""
 
+    # Phase 2.7 Routing
+    ROUTING_HUBSPOT_WRITES_ENABLED: bool = False
+    ROUTING_SLACK_ENABLED: bool = False
+    SLACK_BOT_TOKEN: str | None = None
+    SLACK_NOTIFICATION_CHANNEL_ID: str | None = None
+    SLACK_ESCALATION_CHANNEL_ID: str | None = None
+    HUBSPOT_STAGE_ID_ACTIVELY_FUELING: str | None = None
+
     @property
     def cors_origins_list(self) -> list[str]:
         return [o.strip() for o in self.CORS_ORIGINS.split(",") if o.strip()]
