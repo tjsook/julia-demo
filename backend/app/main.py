@@ -19,6 +19,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.clients.eds_client import close_eds_client
+from app.clients.slack_client import close_slack_client
 from app.core.config import get_settings
 from app.core.errors import register_exception_handlers
 from app.core.logging import configure_logging, get_logger
@@ -31,9 +32,12 @@ from app.routers import (
     mapping_review_routes,
     program_metrics_routes,
 )
+from app.routers.event_routes import router as event_router
 from app.routers.fueling_attribution_routes import router as fueling_attribution_router
+from app.routers.hubspot_webhooks import router as hubspot_webhook_router
 from app.routers.pipeline_health_routes import router as pipeline_health_router
 from app.routers.rep_performance_routes import router as rep_performance_router
+from app.routers.routing_audit_routes import router as routing_audit_router
 
 settings = get_settings()
 configure_logging(settings.LOG_LEVEL)
@@ -46,6 +50,7 @@ async def lifespan(_: FastAPI):
     yield
     logger.info("Shutting down — closing external clients")
     await close_eds_client()
+    await close_slack_client()
 
 
 def create_app(*, root_path: str = "") -> FastAPI:
@@ -75,9 +80,12 @@ def create_app(*, root_path: str = "") -> FastAPI:
     application.include_router(fueling_routes.router)
     application.include_router(program_metrics_routes.router)
     application.include_router(mapping_review_routes.router)
+    application.include_router(hubspot_webhook_router)
     application.include_router(pipeline_health_router)
     application.include_router(rep_performance_router)
     application.include_router(fueling_attribution_router)
+    application.include_router(event_router)
+    application.include_router(routing_audit_router)
     return application
 
 
