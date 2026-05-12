@@ -66,7 +66,7 @@ class Settings(BaseSettings):
     EVENT_SEVERE_LAPSED_DAYS: int = 14
     EVENT_REP_STUCK_DEAL_THRESHOLD: int = 5
     EVENT_REP_STUCK_STAGE_DAYS: int = 7
-    EVENT_REP_OVERDUE_TASK_THRESHOLD: int = 3
+    EVENT_REP_OVERDUE_TASK_THRESHOLD: int = Field(..., gt=0)
     EVENT_PAPERWORK_STAGE_IDS: str = ""
 
     # Phase 2.7 Routing
