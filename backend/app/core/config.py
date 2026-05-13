@@ -52,6 +52,8 @@ class Settings(BaseSettings):
     HUBSPOT_API_BASE_URL: str = "https://api.hubapi.com"
     HUBSPOT_PRIVATE_APP_TOKEN: str | None = None
     HUBSPOT_WEBHOOK_ENFORCE_SIGNATURE: bool = False
+    HUBSPOT_FUEL_CARD_PIPELINE_ID: str = "1983558335"
+    PIPELINE_COHORT_LOOKFORWARD_DAYS: int = 90
 
     # Internal jobs auth (Cloud Scheduler -> /internal/jobs/*)
     INTERNAL_JOB_TOKEN: str | None = None
