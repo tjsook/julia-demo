@@ -41,17 +41,16 @@ npm run dev
 
 ## Database
 
-Apply the current schemas with:
+Apply all migrations in order (`001` through latest in `backend/migrations/`).
+Recent schema additions include:
 
-```bash
-psql "$SUPABASE_DB_URL" -f backend/migrations/001_eds_polling.sql
-psql "$SUPABASE_DB_URL" -f backend/migrations/002_fueling_activity.sql
-psql "$SUPABASE_DB_URL" -f backend/migrations/003_hubspot_sync.sql
-```
+- HubSpot deal stage catalog + transitions (`009`, `010`, `011`)
+- Manual mapping persistence guardrails (`012`, `013`)
+- HubSpot calls ingestion tables (`014`)
 
 ## Current State
 
-Phase 1 EDS ingestion is implemented for the current backend polling scope. Phase 1.3 HubSpot sync ingestion is implemented as a read-only periodic sync into Supabase for users, deals, companies, contacts, and tasks.
+EDS ingestion is implemented for the current polling scope. HubSpot sync ingestion is implemented as a periodic read model into Supabase for users, deals, companies, contacts, tasks, calls, and deal pipeline stage metadata.
 
 HubSpot sync entrypoints:
 
@@ -60,6 +59,8 @@ HubSpot sync entrypoints:
 - `/internal/jobs/poll-hubspot-companies`
 - `/internal/jobs/poll-hubspot-contacts`
 - `/internal/jobs/poll-hubspot-tasks`
+- `/internal/jobs/poll-hubspot-calls`
+- `/internal/jobs/poll-hubspot-deal-pipelines`
 - `/internal/jobs/poll-hubspot-all`
 
 The dashboard should read HubSpot-derived state from the database, not live HubSpot API calls on page load. EDS-to-HubSpot mapping remains a separate Phase 1.4 track.

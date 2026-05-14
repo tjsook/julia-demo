@@ -24,3 +24,4 @@ coverage/
 
 # Personal
 planning-docs-private/
+.DS_Store
