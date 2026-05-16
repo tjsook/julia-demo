@@ -32,6 +32,7 @@ from app.routers import (
     mapping_review_routes,
     program_metrics_routes,
 )
+from app.routers.docusign_webhooks import router as docusign_webhook_router
 from app.routers.event_routes import router as event_router
 from app.routers.fueling_attribution_routes import router as fueling_attribution_router
 from app.routers.hubspot_webhooks import router as hubspot_webhook_router
@@ -86,6 +87,7 @@ def create_app(*, root_path: str = "") -> FastAPI:
     application.include_router(fueling_attribution_router)
     application.include_router(event_router)
     application.include_router(routing_audit_router)
+    application.include_router(docusign_webhook_router)
     return application
 
 
