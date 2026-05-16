@@ -12,8 +12,9 @@ export const authOptions: NextAuthOptions = {
     strategy: "jwt",
   },
   callbacks: {
-    async signIn({ profile }) {
-      return profile?.email?.endsWith("@hemut.com") ?? false;
+    async signIn({ user, profile }) {
+      const email = profile?.email ?? user?.email ?? "";
+      return email.endsWith("@hemut.com");
     },
   },
   pages: {
