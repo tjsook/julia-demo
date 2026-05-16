@@ -10,6 +10,7 @@
   "dependencies": {
     "lucide-react": "^1.14.0",
     "next": "latest",
+    "next-auth": "^4.24.14",
     "react": "latest",
     "react-dom": "latest"
   },
