@@ -79,6 +79,18 @@ class Settings(BaseSettings):
     SLACK_ESCALATION_CHANNEL_ID: str | None = None
     HUBSPOT_STAGE_ID_ACTIVELY_FUELING: str | None = None
 
+    # Affiliate Program — DocuSign
+    DOCUSIGN_ACCOUNT_ID: str | None = None
+    DOCUSIGN_INTEGRATION_KEY: str | None = None
+    DOCUSIGN_USER_ID: str | None = None
+    # PEM private key; supports both literal newlines and \n-escaped single-line format
+    DOCUSIGN_PRIVATE_KEY: str | None = None
+    DOCUSIGN_OAUTH_BASE_URI: str = "https://account-d.docusign.com"
+    DOCUSIGN_REST_BASE_URI: str = "https://demo.docusign.net"
+    DOCUSIGN_CONNECT_HMAC_SECRET: str | None = None
+    # Comma-separated template GUIDs; envelopes from other templates are ignored
+    AFFILIATE_TEMPLATE_IDS: str = ""
+
     @property
     def cors_origins_list(self) -> list[str]:
         return [o.strip() for o in self.CORS_ORIGINS.split(",") if o.strip()]
@@ -86,6 +98,17 @@ class Settings(BaseSettings):
     @property
     def paperwork_stage_ids(self) -> list[str]:
         return [s.strip() for s in self.EVENT_PAPERWORK_STAGE_IDS.split(",") if s.strip()]
+
+    @property
+    def affiliate_template_ids_list(self) -> list[str]:
+        return [t.strip() for t in self.AFFILIATE_TEMPLATE_IDS.split(",") if t.strip()]
+
+    @property
+    def docusign_private_key_pem(self) -> str | None:
+        """Normalize the private key — handles both \\n-escaped and literal-newline formats."""
+        if self.DOCUSIGN_PRIVATE_KEY is None:
+            return None
+        return self.DOCUSIGN_PRIVATE_KEY.replace("\\n", "\n")
 
 
 @lru_cache(maxsize=1)
