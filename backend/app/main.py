@@ -33,6 +33,7 @@ from app.routers import (
     program_metrics_routes,
 )
 from app.routers.affiliate_routes import router as affiliate_router
+from app.routers.clerk_webhooks import router as clerk_webhook_router
 from app.routers.docusign_webhooks import router as docusign_webhook_router
 from app.routers.event_routes import router as event_router
 from app.routers.fueling_attribution_routes import router as fueling_attribution_router
@@ -89,6 +90,7 @@ def create_app(*, root_path: str = "") -> FastAPI:
     application.include_router(event_router)
     application.include_router(routing_audit_router)
     application.include_router(docusign_webhook_router)
+    application.include_router(clerk_webhook_router)
     application.include_router(affiliate_router)
     return application
 
