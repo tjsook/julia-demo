@@ -22,6 +22,12 @@ export function cacheInvalidate(...keys: string[]): void {
   for (const key of keys) store.delete(key);
 }
 
+export function cacheInvalidatePrefix(prefix: string): void {
+  for (const key of store.keys()) {
+    if (key.startsWith(prefix)) store.delete(key);
+  }
+}
+
 export const CACHE_KEYS = {
   PIPELINE_SUMMARY: "/pipeline/summary?include_stuck_count=false",
   PIPELINE_STUCK: "/pipeline/stuck-deals?threshold_days=5",
