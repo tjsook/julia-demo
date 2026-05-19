@@ -33,6 +33,7 @@ from app.routers import (
     program_metrics_routes,
 )
 from app.routers.affiliate_routes import router as affiliate_router
+from app.routers.banking_routes import router as banking_router
 from app.routers.clerk_webhooks import router as clerk_webhook_router
 from app.routers.docusign_webhooks import router as docusign_webhook_router
 from app.routers.event_routes import router as event_router
@@ -41,6 +42,7 @@ from app.routers.hubspot_webhooks import router as hubspot_webhook_router
 from app.routers.pipeline_health_routes import router as pipeline_health_router
 from app.routers.rep_performance_routes import router as rep_performance_router
 from app.routers.routing_audit_routes import router as routing_audit_router
+from app.routers.terms_routes import router as terms_router
 
 settings = get_settings()
 configure_logging(settings.LOG_LEVEL)
@@ -95,6 +97,8 @@ def create_app(*, root_path: str = "") -> FastAPI:
     application.include_router(docusign_webhook_router)
     application.include_router(clerk_webhook_router)
     application.include_router(affiliate_router)
+    application.include_router(terms_router)
+    application.include_router(banking_router)
     return application
 
 
