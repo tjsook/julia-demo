@@ -79,6 +79,18 @@ class Settings(BaseSettings):
     SLACK_ESCALATION_CHANNEL_ID: str | None = None
     HUBSPOT_STAGE_ID_ACTIVELY_FUELING: str | None = None
 
+    # Affiliate Program — Clerk (invitation / webhook integration)
+    CLERK_SECRET_KEY: str | None = None
+    CLERK_PUBLISHABLE_KEY: str | None = None
+    CLERK_WEBHOOK_SIGNING_SECRET: str | None = None
+    # URL affiliates land on after accepting an invitation
+    AFFILIATE_DASHBOARD_URL: str = "https://hemutpartners.com"
+
+    # Affiliate Banking — encryption + admin unlock gate (Phase G contract overhaul)
+    BANKING_ENCRYPTION_KEY: str | None = None   # pgp_sym_encrypt key; passed to DB RPC
+    BANKING_VIEW_PASSWORD: str | None = None    # admin password to obtain unlock JWT
+    BANKING_JWT_SECRET: str | None = None       # HS256 signing secret for unlock JWTs
+
     # Affiliate Program — DocuSign
     DOCUSIGN_ACCOUNT_ID: str | None = None
     DOCUSIGN_INTEGRATION_KEY: str | None = None
