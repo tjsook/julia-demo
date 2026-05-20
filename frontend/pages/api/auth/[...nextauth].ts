@@ -10,11 +10,18 @@ export const authOptions: NextAuthOptions = {
   ],
   session: {
     strategy: "jwt",
+    maxAge: 7 * 24 * 60 * 60,
   },
   callbacks: {
     async signIn({ user, profile }) {
       const email = profile?.email ?? user?.email ?? "";
-      return email.endsWith("@hemut.com");
+      if (!email.endsWith("@hemut.com")) return false;
+      const allowedEmails = (process.env.NEXTAUTH_ALLOWED_EMAILS ?? "")
+        .split(",")
+        .map((e) => e.trim())
+        .filter(Boolean);
+      if (allowedEmails.length === 0) return false;
+      return allowedEmails.includes(email);
     },
   },
   pages: {
