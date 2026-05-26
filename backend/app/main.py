@@ -43,6 +43,7 @@ from app.routers.pipeline_health_routes import router as pipeline_health_router
 from app.routers.rep_performance_routes import router as rep_performance_router
 from app.routers.routing_audit_routes import router as routing_audit_router
 from app.routers.terms_routes import router as terms_router
+from app.routers.waitlist_routes import router as waitlist_router
 
 settings = get_settings()
 configure_logging(settings.LOG_LEVEL)
@@ -99,6 +100,7 @@ def create_app(*, root_path: str = "") -> FastAPI:
     application.include_router(affiliate_router)
     application.include_router(terms_router)
     application.include_router(banking_router)
+    application.include_router(waitlist_router)
     return application
 
 
