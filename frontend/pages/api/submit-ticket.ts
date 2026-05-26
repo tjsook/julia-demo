@@ -12,11 +12,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(405).json({ error: "Method not allowed" });
   }
 
-  const { title, description, area } = req.body;
+  const title = String(req.body?.title ?? "").trim();
+  const description = String(req.body?.description ?? "").trim();
+  const area = String(req.body?.area ?? "").trim();
 
   if (!title || !description || !area) {
-    return res.status(400).json({ error: "All fields are required" });
-  }
 
   const apiKey = process.env.LINEAR_API_KEY;
   const teamId = process.env.LINEAR_TEAM_ID;
