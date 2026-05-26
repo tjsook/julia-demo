@@ -23,7 +23,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const projectId = process.env.LINEAR_PROJECT_ID;
 
   if (!apiKey || !teamId || !projectId) {
-  return res.status(500).json({ error: "Server configuration error" });
+    return res.status(500).json({ error: "Server configuration error" });
   }
 
   const mutation = `
