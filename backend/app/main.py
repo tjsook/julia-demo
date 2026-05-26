@@ -21,7 +21,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.clients.eds_client import close_eds_client
 from app.clients.slack_client import close_slack_client
 from app.core.config import get_settings
-from app.core.errors import register_exception_handlers
+from app.core.errors import UnhandledExceptionMiddleware, register_exception_handlers
 from app.core.logging import configure_logging, get_logger
 from app.middleware.request_id import RequestIDMiddleware
 from app.routers import (
@@ -33,6 +33,7 @@ from app.routers import (
     program_metrics_routes,
 )
 from app.routers.affiliate_routes import router as affiliate_router
+from app.routers.banking_routes import router as banking_router
 from app.routers.clerk_webhooks import router as clerk_webhook_router
 from app.routers.docusign_webhooks import router as docusign_webhook_router
 from app.routers.event_routes import router as event_router
@@ -41,6 +42,8 @@ from app.routers.hubspot_webhooks import router as hubspot_webhook_router
 from app.routers.pipeline_health_routes import router as pipeline_health_router
 from app.routers.rep_performance_routes import router as rep_performance_router
 from app.routers.routing_audit_routes import router as routing_audit_router
+from app.routers.terms_routes import router as terms_router
+from app.routers.waitlist_routes import router as waitlist_router
 
 settings = get_settings()
 configure_logging(settings.LOG_LEVEL)
@@ -73,6 +76,9 @@ def create_app(*, root_path: str = "") -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+    # UnhandledExceptionMiddleware sits INSIDE CORSMiddleware so that even
+    # unexpected 500s get the Access-Control-Allow-Origin header. See errors.py.
+    application.add_middleware(UnhandledExceptionMiddleware)
     application.add_middleware(RequestIDMiddleware)
 
     register_exception_handlers(application)
@@ -92,6 +98,9 @@ def create_app(*, root_path: str = "") -> FastAPI:
     application.include_router(docusign_webhook_router)
     application.include_router(clerk_webhook_router)
     application.include_router(affiliate_router)
+    application.include_router(terms_router)
+    application.include_router(banking_router)
+    application.include_router(waitlist_router)
     return application
 
 

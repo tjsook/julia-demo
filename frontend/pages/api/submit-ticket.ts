@@ -17,6 +17,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const area = String(req.body?.area ?? "").trim();
 
   if (!title || !description || !area) {
+    return res.status(400).json({ error: "Missing required fields" });
+  }
 
   const apiKey = process.env.LINEAR_API_KEY;
   const teamId = process.env.LINEAR_TEAM_ID;
