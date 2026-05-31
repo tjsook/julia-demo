@@ -35,6 +35,7 @@ from app.routers import (
 from app.routers.affiliate_routes import router as affiliate_router
 from app.routers.banking_routes import router as banking_router
 from app.routers.clerk_webhooks import router as clerk_webhook_router
+from app.routers.commission_read_routes import router as commission_read_router
 from app.routers.docusign_webhooks import router as docusign_webhook_router
 from app.routers.event_routes import router as event_router
 from app.routers.fueling_attribution_routes import router as fueling_attribution_router
@@ -100,6 +101,7 @@ def create_app(*, root_path: str = "") -> FastAPI:
     application.include_router(affiliate_router)
     application.include_router(terms_router)
     application.include_router(banking_router)
+    application.include_router(commission_read_router)
     application.include_router(waitlist_router)
     return application
 
