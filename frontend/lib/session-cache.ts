@@ -37,6 +37,9 @@ export const CACHE_KEYS = {
   FUELING_ATTRIBUTION: "/fueling-attribution/summary",
   PROGRAM_METRICS: "/program/summary",
   PROGRAM_SAVINGS: "/program/savings-summary",
+  COMMISSION_RECONCILIATIONS: "/commission/reconciliations",
+  COMMISSION_ROLLOFF: "/commission/program/rolloff-projection",
+  COMMISSION_REPS_DIRECTORY: "/commission/reps-directory",
 } as const;
 
 export function installFetchCache(): void {
