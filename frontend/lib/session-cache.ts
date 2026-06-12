@@ -37,6 +37,11 @@ export const CACHE_KEYS = {
   FUELING_ATTRIBUTION: "/fueling-attribution/summary",
   PROGRAM_METRICS: "/program/summary",
   PROGRAM_SAVINGS: "/program/savings-summary",
+  // Commission endpoints — Lane 3: use cacheGet(CACHE_KEYS.X) before fetch for warm-cache
+  // short-circuit. For dynamic keys (per-month, per-rep) build inline, e.g.:
+  //   const key = `/commission/reconciliations/${month}/summary`;
+  //   const cached = cacheGet<CommissionMonthSummary>(key);
+  // After any commission write, call cacheInvalidatePrefix("/commission/") to bust all entries.
   COMMISSION_RECONCILIATIONS: "/commission/reconciliations",
   COMMISSION_ROLLOFF: "/commission/program/rolloff-projection",
   COMMISSION_REPS_DIRECTORY: "/commission/reps-directory",
