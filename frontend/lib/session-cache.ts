@@ -69,8 +69,11 @@ export function installFetchCache(): void {
 
     const res = await original(input, init);
     if (res.ok) {
-      const data = await res.clone().json();
-      cacheSet(key, data);
+      const contentType = res.headers.get("content-type") ?? "";
+      if (contentType.includes("application/json")) {
+        const data = await res.clone().json();
+        cacheSet(key, data);
+      }
     }
     return res;
   };
