@@ -14,6 +14,7 @@
   --accent-red: #ef4444;
   --accent-purple: #a855f7;
   --hemut-gold: #f5c518;
+  --surface: #ffffff;
   font-family: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", sans-serif;
 }
 
@@ -27,8 +28,14 @@
 
 html,
 body {
+  width: 100%;
   height: 100%;
   background: var(--main-bg);
   color: var(--text-primary);
   -webkit-font-smoothing: antialiased;
+}
+
+#__next {
+  width: 100%;
+  height: 100%;
 }
