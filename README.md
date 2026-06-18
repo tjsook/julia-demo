@@ -39,6 +39,22 @@ npm install
 npm run dev
 ```
 
+## Git Hooks (Optional)
+
+To auto-run Ruff fixes before every push:
+
+```bash
+git config core.hooksPath .githooks
+chmod +x .githooks/pre-push
+```
+
+The pre-push hook runs:
+
+- `ruff check backend --fix`
+- `ruff check backend`
+
+If fixes are applied, push is blocked so you can review/stage/commit the changes first.
+
 ## Database
 
 Apply all migrations in order (`001` through latest in `backend/migrations/`).
