@@ -77,6 +77,7 @@ class Settings(BaseSettings):
     SLACK_BOT_TOKEN: str | None = None
     SLACK_NOTIFICATION_CHANNEL_ID: str | None = None
     SLACK_ESCALATION_CHANNEL_ID: str | None = None
+    COMMISSION_PAYOUT_REMINDER_SLACK_USER_ID: str | None = None
     HUBSPOT_STAGE_ID_ACTIVELY_FUELING: str | None = None
 
     # Affiliate Program — Clerk (invitation / webhook integration)
