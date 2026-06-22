@@ -31,6 +31,7 @@ from app.routers import (
     internal_jobs,
     mapping_review_routes,
     program_metrics_routes,
+    roi_demo_routes,
 )
 from app.routers.affiliate_routes import router as affiliate_router
 from app.routers.banking_routes import router as banking_router
@@ -105,6 +106,7 @@ def create_app(*, root_path: str = "") -> FastAPI:
     application.include_router(commission_read_router)
     application.include_router(waitlist_router)
     application.include_router(commission_admin_router)
+    application.include_router(roi_demo_routes.router)
     return application
 
 
