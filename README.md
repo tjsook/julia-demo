@@ -44,8 +44,7 @@ npm run dev
 To auto-run Ruff fixes before every push:
 
 ```bash
-git config core.hooksPath .githooks
-chmod +x .githooks/pre-push
+./scripts/install-git-hooks.sh
 ```
 
 The pre-push hook runs:
