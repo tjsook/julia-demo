@@ -16,6 +16,7 @@ Supabase is the system of record. The frontend calls the backend over HTTP using
 - [Phased Delivery Plan](./PHASES.md)
 - [Data Contracts and Decisions](./DATA-CONTRACTS.md)
 - [Job Schedule](./SCHEDULE.md)
+- [ROI Demo Runbook](./docs/roi-demo.md)
 
 ## Local Setup
 
