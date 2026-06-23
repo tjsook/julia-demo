@@ -62,6 +62,7 @@ class Settings(BaseSettings):
 
     # CORS
     CORS_ORIGINS: str = "http://localhost:3000,http://127.0.0.1:3000,https://dashboard.gethemutdiesel.com"
+    CORS_ALLOW_ORIGIN_REGEX: str = r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$"
 
     # Phase 2.6 Event Detection
     EVENT_LAPSED_DAYS: int = 7
