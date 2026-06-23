@@ -88,7 +88,8 @@ class Settings(BaseSettings):
     OPENAI_TTS_VOICE: str = "marin"
     OPENAI_TTS_INSTRUCTIONS: str = (
         "Speak like a polished enterprise sales analyst: natural, calm, confident, and concise. "
-        "Use a realistic conversational cadence. Do not sound overly cheerful or robotic."
+        "Use a realistic conversational cadence. Do not sound overly cheerful or robotic. "
+        "Pronounce Hemut as /ˈhɛmɪt/."
     )
     ROI_DEMO_AUDIO_MAX_MB: int = Field(default=20, ge=1, le=100)
     ROI_DEMO_ALLOWED_EMAILS: str = ""
