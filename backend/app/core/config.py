@@ -62,6 +62,7 @@ class Settings(BaseSettings):
 
     # CORS
     CORS_ORIGINS: str = "http://localhost:3000,http://127.0.0.1:3000,https://dashboard.gethemutdiesel.com"
+    CORS_ALLOW_ORIGIN_REGEX: str = r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$"
 
     # Phase 2.6 Event Detection
     EVENT_LAPSED_DAYS: int = 7
@@ -86,6 +87,11 @@ class Settings(BaseSettings):
     OPENAI_EXTRACTION_MODEL: str = "gpt-4o-mini"
     OPENAI_TTS_MODEL: str = "gpt-4o-mini-tts"
     OPENAI_TTS_VOICE: str = "marin"
+    OPENAI_TTS_INSTRUCTIONS: str = (
+        "Speak like a polished enterprise sales analyst: natural, calm, confident, and concise. "
+        "Use a realistic conversational cadence. Do not sound overly cheerful or robotic. "
+        "Pronounce Hemut as /ˈhɛmɪt/."
+    )
     ROI_DEMO_AUDIO_MAX_MB: int = Field(default=20, ge=1, le=100)
     ROI_DEMO_ALLOWED_EMAILS: str = ""
 
