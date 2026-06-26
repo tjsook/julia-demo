@@ -81,20 +81,6 @@ class Settings(BaseSettings):
     COMMISSION_PAYOUT_REMINDER_SLACK_USER_ID: str | None = None
     HUBSPOT_STAGE_ID_ACTIVELY_FUELING: str | None = None
 
-    # ROI Demo + OpenAI
-    OPENAI_API_KEY: str | None = None
-    OPENAI_STT_MODEL: str = "gpt-4o-mini-transcribe"
-    OPENAI_EXTRACTION_MODEL: str = "gpt-4o-mini"
-    OPENAI_TTS_MODEL: str = "gpt-4o-mini-tts"
-    OPENAI_TTS_VOICE: str = "marin"
-    OPENAI_TTS_INSTRUCTIONS: str = (
-        "Speak like a polished enterprise sales analyst: natural, calm, confident, and concise. "
-        "Use a realistic conversational cadence. Do not sound overly cheerful or robotic. "
-        "Pronounce Hemut as /ˈhɛmɪt/."
-    )
-    ROI_DEMO_AUDIO_MAX_MB: int = Field(default=20, ge=1, le=100)
-    ROI_DEMO_ALLOWED_EMAILS: str = ""
-
     # Affiliate Program — Clerk (invitation / webhook integration)
     CLERK_SECRET_KEY: str | None = None
     CLERK_PUBLISHABLE_KEY: str | None = None
