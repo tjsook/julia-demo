@@ -31,7 +31,6 @@ from app.routers import (
     internal_jobs,
     mapping_review_routes,
     program_metrics_routes,
-    roi_demo_routes,
 )
 from app.routers.affiliate_routes import router as affiliate_router
 from app.routers.banking_routes import router as banking_router
@@ -47,7 +46,6 @@ from app.routers.rep_performance_routes import router as rep_performance_router
 from app.routers.routing_audit_routes import router as routing_audit_router
 from app.routers.terms_routes import router as terms_router
 from app.routers.waitlist_routes import router as waitlist_router
-from app.services.roi_openai_service import close_roi_openai_service, warm_roi_openai_service
 
 settings = get_settings()
 configure_logging(settings.LOG_LEVEL)
@@ -57,12 +55,10 @@ logger = get_logger("diesel_dashboard_backend")
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     logger.info("Starting %s (env=%s)", settings.APP_NAME, settings.APP_ENV)
-    await warm_roi_openai_service()
     yield
     logger.info("Shutting down — closing external clients")
     await close_eds_client()
     await close_slack_client()
-    await close_roi_openai_service()
 
 
 def create_app(*, root_path: str = "") -> FastAPI:
@@ -110,7 +106,6 @@ def create_app(*, root_path: str = "") -> FastAPI:
     application.include_router(commission_read_router)
     application.include_router(waitlist_router)
     application.include_router(commission_admin_router)
-    application.include_router(roi_demo_routes.router)
     return application
 
 
