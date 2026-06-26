@@ -23,6 +23,7 @@ class Settings(BaseSettings):
         env_file=(
             _REPO_ROOT / ".env",
             _REPO_ROOT / ".env.local",
+            _REPO_ROOT / "frontend" / ".env.local",
             _BACKEND_DIR / ".env",
             _BACKEND_DIR / ".env.local",
         ),
