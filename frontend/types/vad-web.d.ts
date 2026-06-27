@@ -1,5 +1,8 @@
 declare module "@ricky0123/vad-web" {
   export interface MicVADOptions {
+    baseAssetPath?: string;
+    model?: "v5" | "legacy";
+    onnxWASMBasePath?: string;
     onSpeechEnd?: (audio: Float32Array) => void;
     onVADMisfire?: () => void;
     positiveSpeechThreshold?: number;
