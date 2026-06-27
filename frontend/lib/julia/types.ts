@@ -33,3 +33,23 @@ export interface JuliaEditPayload {
   isActive?: boolean;
   file?: File;
 }
+
+export type JuliaVoiceIntent = "single_match" | "multi_match" | "no_match" | "non_doc";
+
+export interface JuliaVoiceMatch {
+  id: string;
+  title: string;
+}
+
+export interface JuliaVoiceIntentResponse {
+  transcript: string;
+  intent: JuliaVoiceIntent;
+  matches: JuliaVoiceMatch[];
+  tts_audio_base64: string | null;
+  tts_mime_type: string | null;
+}
+
+export interface JuliaRecordedAudio {
+  blob: Blob;
+  filename: string;
+}
