@@ -5,8 +5,11 @@ import type {
   JuliaDocumentListResponse,
   JuliaDocumentStatus,
   JuliaEditPayload,
+  JuliaRecordedAudio,
   JuliaSignedUrlResponse,
   JuliaUploadPayload,
+  JuliaVoiceIntentResponse,
+  JuliaVoicePlaybackResponse,
 } from "./types";
 
 const BASE_URL =
@@ -110,4 +113,33 @@ export async function fetchJuliaSignedUrl(documentId: string): Promise<JuliaSign
     { headers, cache: "no-store" },
   );
   return parseJuliaJson<JuliaSignedUrlResponse>(res, "Failed to create signed URL.");
+}
+
+export async function postJuliaVoiceIntent(
+  recording: JuliaRecordedAudio,
+): Promise<JuliaVoiceIntentResponse> {
+  const headers = await dashboardAuthHeaders();
+  const form = new FormData();
+  form.set("audio", recording.blob, recording.filename);
+  const res = await fetch(`${BASE_URL}/julia/voice/intent`, {
+    method: "POST",
+    headers,
+    body: form,
+  });
+  return parseJuliaJson<JuliaVoiceIntentResponse>(res, "Failed to process Julia voice intent.");
+}
+
+export async function postJuliaVoiceDocumentConfirmation(
+  documentId: string,
+): Promise<JuliaVoicePlaybackResponse> {
+  const headers = await dashboardAuthHeaders();
+  const res = await fetch(
+    `${BASE_URL}/julia/voice/documents/${encodeURIComponent(documentId)}/confirmation`,
+    {
+      method: "POST",
+      headers,
+      cache: "no-store",
+    },
+  );
+  return parseJuliaJson<JuliaVoicePlaybackResponse>(res, "Failed to create Julia voice response.");
 }

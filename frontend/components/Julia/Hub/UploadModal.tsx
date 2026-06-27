@@ -1,8 +1,9 @@
 import * as Dialog from "@radix-ui/react-dialog";
-import { FilePlus2, X } from "lucide-react";
+import { FilePlus2, WandSparkles, X } from "lucide-react";
 import { FormEvent, useEffect, useState } from "react";
 
 import { useJuliaUpload } from "../../../hooks/julia/useJuliaUpload";
+import { deriveAliasSuggestions } from "../../../lib/julia/deriveAliasSuggestions";
 import { deriveJuliaDocumentId, titleFromFilename } from "../../../lib/julia/deriveId";
 import {
   validateJuliaAliases,
@@ -57,6 +58,7 @@ export function UploadModal({ open, onOpenChange, onUploaded }: UploadModalProps
 
   const busy = state === "uploading";
   const idPreview = file ? deriveJuliaDocumentId(file.name) : "";
+  const aliasSuggestions = deriveAliasSuggestions(title);
 
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
@@ -89,15 +91,27 @@ export function UploadModal({ open, onOpenChange, onUploaded }: UploadModalProps
               <input value={title} onChange={(event) => setTitle(event.currentTarget.value)} />
             </label>
 
-            <label className={s.field}>
-              <span>Aliases</span>
+            <div className={s.field}>
+              <div className={s.fieldHeader}>
+                <label htmlFor="julia-upload-aliases">Aliases</label>
+                <button
+                  type="button"
+                  className={s.aliasSuggestButton}
+                  disabled={busy || aliasSuggestions.length === 0}
+                  onClick={() => setAliases(aliasSuggestions.join(", "))}
+                >
+                  <WandSparkles size={14} strokeWidth={1.8} />
+                  <span>Suggest from title</span>
+                </button>
+              </div>
               <textarea
+                id="julia-upload-aliases"
                 value={aliases}
                 onChange={(event) => setAliases(event.currentTarget.value)}
                 rows={3}
                 placeholder="meiborg, meiborg roi, meiborg case"
               />
-            </label>
+            </div>
 
             {(localError || error) && (
               <div className={s.formError}>{localError ?? error}</div>

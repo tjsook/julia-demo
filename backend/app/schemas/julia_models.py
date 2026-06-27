@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict
 
@@ -34,6 +35,30 @@ class JuliaSignedUrlResponse(BaseModel):
     title: str
     signed_url: str
     expires_in: int
+
+
+class JuliaVoiceMatch(BaseModel):
+    """Minimal matched document payload for voice retrieval."""
+
+    id: str
+    title: str
+
+
+class JuliaVoiceIntentResponse(BaseModel):
+    """Intent and document matches from a Julia voice utterance."""
+
+    transcript: str
+    intent: Literal["single_match", "multi_match", "no_match", "non_doc"]
+    matches: list[JuliaVoiceMatch]
+    tts_audio_base64: str | None = None
+    tts_mime_type: str | None = None
+
+
+class JuliaVoicePlaybackResponse(BaseModel):
+    """Synthesized Julia voice playback audio."""
+
+    tts_audio_base64: str | None = None
+    tts_mime_type: str | None = None
 
 
 class JuliaErrorResponse(BaseModel):
