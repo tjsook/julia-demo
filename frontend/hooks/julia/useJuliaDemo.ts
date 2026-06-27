@@ -116,6 +116,33 @@ export function useJuliaDemo() {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [cancelListening, state]);
 
+  useEffect(() => {
+    if (
+      state !== "showing-document" ||
+      !lastVoiceResponse?.tts_audio_base64 ||
+      !lastVoiceResponse.tts_mime_type
+    ) {
+      return;
+    }
+
+    const audioUrl = audioUrlFromBase64(
+      lastVoiceResponse.tts_audio_base64,
+      lastVoiceResponse.tts_mime_type,
+    );
+    const audio = new Audio(audioUrl);
+    audio.play().catch((err: unknown) => {
+      console.log("julia.tts.play_failed", {
+        event: "julia.tts.play_failed",
+        error: err instanceof Error ? err.message : "Audio playback failed.",
+      });
+    });
+
+    return () => {
+      audio.pause();
+      URL.revokeObjectURL(audioUrl);
+    };
+  }, [lastVoiceResponse, state]);
+
   return {
     state,
     errorToast,
@@ -131,4 +158,13 @@ export function useJuliaDemo() {
     closeForeground,
     dismissError: () => setErrorToast(null),
   };
+}
+
+function audioUrlFromBase64(base64Audio: string, mimeType: string): string {
+  const binary = window.atob(base64Audio);
+  const bytes = new Uint8Array(binary.length);
+  for (let idx = 0; idx < binary.length; idx += 1) {
+    bytes[idx] = binary.charCodeAt(idx);
+  }
+  return URL.createObjectURL(new Blob([bytes], { type: mimeType }));
 }
