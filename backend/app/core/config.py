@@ -69,6 +69,12 @@ class Settings(BaseSettings):
     GOOGLE_CLIENT_ID: str | None = None
     NEXTAUTH_ALLOWED_EMAILS: str = ""
 
+    # Julia voice retrieval — OpenAI STT/TTS
+    OPENAI_API_KEY: str | None = None
+    OPENAI_STT_MODEL: str = "gpt-4o-mini-transcribe"
+    OPENAI_TTS_MODEL: str = "gpt-4o-mini-tts"
+    OPENAI_TTS_VOICE: str = "marin"
+
     # Phase 2.6 Event Detection
     EVENT_LAPSED_DAYS: int = 7
     EVENT_SEVERE_LAPSED_DAYS: int = 14
