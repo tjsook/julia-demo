@@ -8,6 +8,7 @@ type DocumentTableProps = {
   documents: JuliaDocument[];
   loading: boolean;
   busy: boolean;
+  onPreview: (document: JuliaDocument) => void;
   onEdit: (document: JuliaDocument) => void;
   onArchive: (document: JuliaDocument) => void;
   onRestore: (document: JuliaDocument) => void;
@@ -18,6 +19,7 @@ export function DocumentTable({
   documents,
   loading,
   busy,
+  onPreview,
   onEdit,
   onArchive,
   onRestore,
@@ -51,6 +53,7 @@ export function DocumentTable({
               key={document.id}
               document={document}
               busy={busy}
+              onPreview={onPreview}
               onEdit={onEdit}
               onArchive={onArchive}
               onRestore={onRestore}

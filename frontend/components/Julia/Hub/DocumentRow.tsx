@@ -1,4 +1,4 @@
-import { Archive, FilePenLine, RotateCcw, Trash2 } from "lucide-react";
+import { Archive, Eye, FilePenLine, RotateCcw, Trash2 } from "lucide-react";
 
 import type { JuliaDocument } from "../../../lib/julia/types";
 import s from "../../../styles/julia.module.css";
@@ -6,6 +6,7 @@ import s from "../../../styles/julia.module.css";
 type DocumentRowProps = {
   document: JuliaDocument;
   busy: boolean;
+  onPreview: (document: JuliaDocument) => void;
   onEdit: (document: JuliaDocument) => void;
   onArchive: (document: JuliaDocument) => void;
   onRestore: (document: JuliaDocument) => void;
@@ -15,6 +16,7 @@ type DocumentRowProps = {
 export function DocumentRow({
   document,
   busy,
+  onPreview,
   onEdit,
   onArchive,
   onRestore,
@@ -50,6 +52,18 @@ export function DocumentRow({
       <td className={s.mutedCell}>{updated}</td>
       <td>
         <div className={s.rowActions}>
+          {document.is_active && (
+            <button
+              type="button"
+              className={s.iconButton}
+              aria-label={`Preview ${document.title}`}
+              title="Preview"
+              onClick={() => onPreview(document)}
+              disabled={busy}
+            >
+              <Eye size={16} strokeWidth={1.8} />
+            </button>
+          )}
           <button
             type="button"
             className={s.iconButton}
