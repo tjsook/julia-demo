@@ -1,8 +1,9 @@
 import * as Dialog from "@radix-ui/react-dialog";
-import { FilePenLine, X } from "lucide-react";
+import { FilePenLine, WandSparkles, X } from "lucide-react";
 import { FormEvent, useEffect, useState } from "react";
 
 import { updateJuliaDocument } from "../../../lib/julia/api";
+import { deriveAliasSuggestions } from "../../../lib/julia/deriveAliasSuggestions";
 import type { JuliaDocument } from "../../../lib/julia/types";
 import {
   validateJuliaAliases,
@@ -59,6 +60,8 @@ export function EditModal({ document, open, onOpenChange, onSaved }: EditModalPr
     }
   }
 
+  const aliasSuggestions = deriveAliasSuggestions(title);
+
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
       <Dialog.Portal>
@@ -80,14 +83,26 @@ export function EditModal({ document, open, onOpenChange, onSaved }: EditModalPr
               <input value={title} onChange={(event) => setTitle(event.currentTarget.value)} />
             </label>
 
-            <label className={s.field}>
-              <span>Aliases</span>
+            <div className={s.field}>
+              <div className={s.fieldHeader}>
+                <label htmlFor="julia-edit-aliases">Aliases</label>
+                <button
+                  type="button"
+                  className={s.aliasSuggestButton}
+                  disabled={saving || aliasSuggestions.length === 0}
+                  onClick={() => setAliases(aliasSuggestions.join(", "))}
+                >
+                  <WandSparkles size={14} strokeWidth={1.8} />
+                  <span>Suggest from title</span>
+                </button>
+              </div>
               <textarea
+                id="julia-edit-aliases"
                 value={aliases}
                 onChange={(event) => setAliases(event.currentTarget.value)}
                 rows={3}
               />
-            </label>
+            </div>
 
             <label className={s.field}>
               <span>Replace PDF</span>

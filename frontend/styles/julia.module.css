@@ -338,6 +338,36 @@
   font-weight: 700;
 }
 
+.fieldHeader {
+  min-height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.aliasSuggestButton {
+  min-height: 28px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0 9px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  background: #ffffff;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.aliasSuggestButton:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
 .field input,
 .field textarea {
   width: 100%;
