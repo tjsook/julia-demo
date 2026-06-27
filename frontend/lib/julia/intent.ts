@@ -1,7 +1,7 @@
 import type { JuliaVoiceIntentResponse } from "./types";
 
 export function isSilentVoiceIntent(response: JuliaVoiceIntentResponse): boolean {
-  return response.intent === "no_match" || response.intent === "non_doc";
+  return response.intent === "non_doc";
 }
 
 export function logSilentVoiceIntent(response: JuliaVoiceIntentResponse): void {

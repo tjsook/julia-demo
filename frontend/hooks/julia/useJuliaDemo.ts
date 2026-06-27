@@ -107,6 +107,12 @@ export function useJuliaDemo() {
       return;
     }
 
+    if (response.intent === "no_match") {
+      setTtsPlayback(playbackFromResponse(response, ["idle"]));
+      setState("idle");
+      return;
+    }
+
     setTtsPlayback(null);
     setState("idle");
   }, [openDocument]);

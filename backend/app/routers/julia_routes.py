@@ -30,6 +30,7 @@ MAX_VOICE_AUDIO_BYTES = 25 * 1024 * 1024
 MULTI_MATCH_TTS_TEXT = (
     "I found multiple documents of that type. Which one do you want me to pull up?"
 )
+NO_MATCH_TTS_TEXT = "I could not find that. Narrow down your query."
 
 
 def _service() -> JuliaDocumentService:
@@ -273,6 +274,12 @@ async def voice_intent(
             openai_service,
             text=MULTI_MATCH_TTS_TEXT,
             doc_id=voice_matches[0].id,
+        )
+    elif match_result.intent == "no_match":
+        tts_audio_base64, tts_mime_type = _synthesize_voice_response(
+            openai_service,
+            text=NO_MATCH_TTS_TEXT,
+            doc_id=None,
         )
 
     _log_voice_intent(
