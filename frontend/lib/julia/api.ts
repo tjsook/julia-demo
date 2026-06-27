@@ -1,4 +1,5 @@
 import { getSession } from "next-auth/react";
+import { cacheInvalidatePrefix } from "../session-cache";
 import type {
   JuliaDocument,
   JuliaDocumentListResponse,
@@ -10,6 +11,7 @@ import type {
 
 const BASE_URL =
   process.env.NEXT_PUBLIC_API_URL?.replace(/\/$/, "") ?? "http://localhost:8000";
+const JULIA_CACHE_PREFIX = "/julia/";
 
 async function dashboardAuthHeaders(): Promise<HeadersInit> {
   const session = await getSession();
@@ -63,7 +65,9 @@ export async function uploadJuliaDocument(payload: JuliaUploadPayload): Promise<
     headers,
     body: form,
   });
-  return parseJuliaJson<JuliaDocument>(res, "Failed to upload Julia document.");
+  const document = await parseJuliaJson<JuliaDocument>(res, "Failed to upload Julia document.");
+  cacheInvalidatePrefix(JULIA_CACHE_PREFIX);
+  return document;
 }
 
 export async function updateJuliaDocument(
@@ -81,7 +85,9 @@ export async function updateJuliaDocument(
     headers,
     body: form,
   });
-  return parseJuliaJson<JuliaDocument>(res, "Failed to update Julia document.");
+  const document = await parseJuliaJson<JuliaDocument>(res, "Failed to update Julia document.");
+  cacheInvalidatePrefix(JULIA_CACHE_PREFIX);
+  return document;
 }
 
 export async function hardDeleteJuliaDocument(documentId: string): Promise<void> {
@@ -90,7 +96,10 @@ export async function hardDeleteJuliaDocument(documentId: string): Promise<void>
     method: "DELETE",
     headers,
   });
-  if (res.status === 204) return;
+  if (res.status === 204) {
+    cacheInvalidatePrefix(JULIA_CACHE_PREFIX);
+    return;
+  }
   await parseJuliaJson<never>(res, "Failed to permanently delete Julia document.");
 }
 
