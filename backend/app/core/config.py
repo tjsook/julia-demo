@@ -23,6 +23,7 @@ class Settings(BaseSettings):
         env_file=(
             _REPO_ROOT / ".env",
             _REPO_ROOT / ".env.local",
+            _REPO_ROOT / "frontend" / ".env.local",
             _BACKEND_DIR / ".env",
             _BACKEND_DIR / ".env.local",
         ),
@@ -63,6 +64,10 @@ class Settings(BaseSettings):
     # CORS
     CORS_ORIGINS: str = "http://localhost:3000,http://127.0.0.1:3000,https://dashboard.gethemutdiesel.com"
     CORS_ALLOW_ORIGIN_REGEX: str = r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$"
+
+    # Dashboard auth (NextAuth Google provider -> backend bearer token)
+    GOOGLE_CLIENT_ID: str | None = None
+    NEXTAUTH_ALLOWED_EMAILS: str = ""
 
     # Phase 2.6 Event Detection
     EVENT_LAPSED_DAYS: int = 7
@@ -112,6 +117,10 @@ class Settings(BaseSettings):
     @property
     def paperwork_stage_ids(self) -> list[str]:
         return [s.strip() for s in self.EVENT_PAPERWORK_STAGE_IDS.split(",") if s.strip()]
+
+    @property
+    def nextauth_allowed_emails_list(self) -> list[str]:
+        return [s.strip().lower() for s in self.NEXTAUTH_ALLOWED_EMAILS.split(",") if s.strip()]
 
     @property
     def affiliate_template_ids_list(self) -> list[str]:

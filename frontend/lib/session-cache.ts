@@ -53,8 +53,9 @@ export function installFetchCache(): void {
   globalThis.fetch = async function (input, init) {
     const url = typeof input === "string" ? input : (input as Request).url;
     const method = (init?.method ?? "GET").toUpperCase();
+    const cacheMode = init?.cache ?? (typeof input === "string" ? undefined : (input as Request).cache);
 
-    if (method !== "GET" || !url.startsWith(BASE_URL)) {
+    if (method !== "GET" || cacheMode === "no-store" || !url.startsWith(BASE_URL)) {
       return original(input, init);
     }
 

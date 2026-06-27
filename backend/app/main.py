@@ -41,6 +41,7 @@ from app.routers.docusign_webhooks import router as docusign_webhook_router
 from app.routers.event_routes import router as event_router
 from app.routers.fueling_attribution_routes import router as fueling_attribution_router
 from app.routers.hubspot_webhooks import router as hubspot_webhook_router
+from app.routers.julia_routes import router as julia_router
 from app.routers.pipeline_health_routes import router as pipeline_health_router
 from app.routers.rep_performance_routes import router as rep_performance_router
 from app.routers.routing_audit_routes import router as routing_audit_router
@@ -106,6 +107,7 @@ def create_app(*, root_path: str = "") -> FastAPI:
     application.include_router(commission_read_router)
     application.include_router(waitlist_router)
     application.include_router(commission_admin_router)
+    application.include_router(julia_router)
     return application
 
 
