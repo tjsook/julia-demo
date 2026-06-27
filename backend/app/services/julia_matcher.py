@@ -10,6 +10,7 @@ JuliaIntent = Literal["single_match", "multi_match", "no_match", "non_doc"]
 
 _PUNCTUATION_RE = re.compile(r"[.,!?;:\"()\[\]\-/\\]+")
 _APOSTROPHE_RE = re.compile(r"[']")
+_TRIGGER_TOKENS = {"doc", "document"}
 
 
 class JuliaMatchDocument(TypedDict):
@@ -45,8 +46,8 @@ def tokenize(value: str) -> list[str]:
 
 
 def strip_trigger(tokens: list[str]) -> tuple[list[str], bool]:
-    """Remove the required trailing 'document' trigger token."""
-    if not tokens or tokens[-1] != "document":
+    """Remove the required trailing document trigger token."""
+    if not tokens or tokens[-1] not in _TRIGGER_TOKENS:
         return tokens, False
     return tokens[:-1], True
 
