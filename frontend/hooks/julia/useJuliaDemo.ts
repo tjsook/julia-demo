@@ -117,11 +117,10 @@ export function useJuliaDemo() {
   }, [cancelListening, state]);
 
   useEffect(() => {
-    if (
-      state !== "showing-document" ||
-      !lastVoiceResponse?.tts_audio_base64 ||
-      !lastVoiceResponse.tts_mime_type
-    ) {
+    if (!["showing-document", "showing-selector"].includes(state)) {
+      return;
+    }
+    if (!lastVoiceResponse?.tts_audio_base64 || !lastVoiceResponse.tts_mime_type) {
       return;
     }
 

@@ -26,6 +26,9 @@ from app.services.julia_openai_service import JuliaOpenAIError, JuliaOpenAIServi
 router = APIRouter(prefix="/julia", tags=["julia"])
 logger = logging.getLogger(__name__)
 MAX_VOICE_AUDIO_BYTES = 25 * 1024 * 1024
+MULTI_MATCH_TTS_TEXT = (
+    "I found multiple documents of that type. Which one do you want me to pull up?"
+)
 
 
 def _service() -> JuliaDocumentService:
@@ -84,6 +87,31 @@ def _voice_documents(rows: list[dict]) -> list[JuliaMatchDocument]:
             }
         )
     return documents
+
+
+def _synthesize_voice_response(
+    openai_service: JuliaOpenAIService,
+    *,
+    text: str,
+    doc_id: str | None,
+) -> tuple[str | None, str | None]:
+    try:
+        tts_audio, tts_mime_type = openai_service.synthesize_speech(text=text)
+    except JuliaOpenAIError as exc:
+        logger.warning(
+            json.dumps(
+                {
+                    "event": "julia.tts_failed",
+                    "code": exc.code,
+                    "detail": exc.detail,
+                    "doc_id": doc_id,
+                },
+                separators=(",", ":"),
+            )
+        )
+        return None, None
+
+    return base64.b64encode(tts_audio).decode("ascii"), tts_mime_type
 
 
 @router.post(
@@ -234,24 +262,17 @@ async def voice_intent(
     tts_mime_type: str | None = None
 
     if match_result.intent == "single_match" and voice_matches:
-        try:
-            tts_audio, tts_mime_type = openai_service.synthesize_speech(
-                text=f"Here's the {voice_matches[0].title} document.",
-            )
-            tts_audio_base64 = base64.b64encode(tts_audio).decode("ascii")
-        except JuliaOpenAIError as exc:
-            logger.warning(
-                json.dumps(
-                    {
-                        "event": "julia.tts_failed",
-                        "code": exc.code,
-                        "detail": exc.detail,
-                        "doc_id": voice_matches[0].id,
-                    },
-                    separators=(",", ":"),
-                )
-            )
-            tts_mime_type = None
+        tts_audio_base64, tts_mime_type = _synthesize_voice_response(
+            openai_service,
+            text=f"Here's the {voice_matches[0].title} document.",
+            doc_id=voice_matches[0].id,
+        )
+    elif match_result.intent == "multi_match" and voice_matches:
+        tts_audio_base64, tts_mime_type = _synthesize_voice_response(
+            openai_service,
+            text=MULTI_MATCH_TTS_TEXT,
+            doc_id=voice_matches[0].id,
+        )
 
     _log_voice_intent(
         transcript=transcript,
