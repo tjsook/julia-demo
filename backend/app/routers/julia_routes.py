@@ -18,6 +18,7 @@ from app.schemas.julia_models import (
     JuliaSignedUrlResponse,
     JuliaVoiceIntentResponse,
     JuliaVoiceMatch,
+    JuliaVoicePlaybackResponse,
 )
 from app.services.julia_document_service import JuliaDocumentService, JuliaServiceError
 from app.services.julia_matcher import JuliaMatchDocument, select_matches
@@ -285,6 +286,43 @@ async def voice_intent(
         transcript=transcript,
         intent=match_result.intent,
         matches=voice_matches,
+        tts_audio_base64=tts_audio_base64,
+        tts_mime_type=tts_mime_type,
+    )
+
+
+@router.post(
+    "/voice/documents/{document_id}/confirmation",
+    response_model=JuliaVoicePlaybackResponse,
+    responses={
+        404: {"model": JuliaErrorResponse},
+        410: {"model": JuliaErrorResponse},
+    },
+)
+async def voice_document_confirmation(
+    document_id: str,
+    _user: Annotated[DashboardUser, Depends(require_dashboard_user)],
+) -> JuliaVoicePlaybackResponse | JSONResponse:
+    """Synthesize Julia's spoken confirmation for a selected document."""
+    try:
+        row = _service().get_document(document_id)
+    except JuliaServiceError as exc:
+        return _error_response(exc)
+
+    if row.get("is_active") is False:
+        return _julia_error(
+            410,
+            "document_archived",
+            "Archived documents are not available for retrieval.",
+        )
+
+    openai_service = _openai_service()
+    tts_audio_base64, tts_mime_type = _synthesize_voice_response(
+        openai_service,
+        text=f"Here's the {row['title']} document.",
+        doc_id=document_id,
+    )
+    return JuliaVoicePlaybackResponse(
         tts_audio_base64=tts_audio_base64,
         tts_mime_type=tts_mime_type,
     )

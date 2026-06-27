@@ -49,6 +49,11 @@ export interface JuliaVoiceIntentResponse {
   tts_mime_type: string | null;
 }
 
+export interface JuliaVoicePlaybackResponse {
+  tts_audio_base64: string | null;
+  tts_mime_type: string | null;
+}
+
 export interface JuliaRecordedAudio {
   blob: Blob;
   filename: string;

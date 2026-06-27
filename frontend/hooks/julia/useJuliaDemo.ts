@@ -1,8 +1,12 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
-import { fetchJuliaSignedUrl } from "../../lib/julia/api";
+import { fetchJuliaSignedUrl, postJuliaVoiceDocumentConfirmation } from "../../lib/julia/api";
 import { isSilentVoiceIntent, logSilentVoiceIntent } from "../../lib/julia/intent";
-import type { JuliaVoiceIntentResponse, JuliaVoiceMatch } from "../../lib/julia/types";
+import type {
+  JuliaVoiceIntentResponse,
+  JuliaVoiceMatch,
+  JuliaVoicePlaybackResponse,
+} from "../../lib/julia/types";
 import { useJuliaVoice } from "./useJuliaVoice";
 
 export type JuliaDemoState =
@@ -12,23 +16,56 @@ export type JuliaDemoState =
   | "showing-document"
   | "showing-selector";
 
+type JuliaTtsPlayback = {
+  audioBase64: string;
+  mimeType: string;
+  playIn: JuliaDemoState[];
+};
+
+type OpenDocumentOptions = {
+  playConfirmation?: boolean;
+  preservePlayback?: boolean;
+};
+
 export function useJuliaDemo() {
   const [state, setState] = useState<JuliaDemoState>("idle");
   const [errorToast, setErrorToast] = useState<string | null>(null);
   const [activeMatch, setActiveMatch] = useState<JuliaVoiceMatch | null>(null);
   const [selectorMatches, setSelectorMatches] = useState<JuliaVoiceMatch[]>([]);
   const [lastVoiceResponse, setLastVoiceResponse] = useState<JuliaVoiceIntentResponse | null>(null);
+  const [ttsPlayback, setTtsPlayback] = useState<JuliaTtsPlayback | null>(null);
   const [documentUrl, setDocumentUrl] = useState<string | null>(null);
   const [documentLoading, setDocumentLoading] = useState(false);
   const [documentError, setDocumentError] = useState<string | null>(null);
+  const confirmationRequestRef = useRef(0);
 
-  const openDocument = useCallback(async (match: JuliaVoiceMatch) => {
+  const queueSelectedDocumentConfirmation = useCallback(async (match: JuliaVoiceMatch) => {
+    const requestId = confirmationRequestRef.current + 1;
+    confirmationRequestRef.current = requestId;
+
+    try {
+      const response = await postJuliaVoiceDocumentConfirmation(match.id);
+      if (confirmationRequestRef.current !== requestId) return;
+      setTtsPlayback(playbackFromResponse(response, ["showing-document"]));
+    } catch (err) {
+      console.log("julia.tts.selection_failed", {
+        event: "julia.tts.selection_failed",
+        doc_id: match.id,
+        error: err instanceof Error ? err.message : "Selected document voice response failed.",
+      });
+    }
+  }, []);
+
+  const openDocument = useCallback(async (match: JuliaVoiceMatch, options: OpenDocumentOptions = {}) => {
+    const playConfirmation = options.playConfirmation ?? true;
     setActiveMatch(match);
     setSelectorMatches([]);
+    if (!options.preservePlayback) setTtsPlayback(null);
     setDocumentUrl(null);
     setDocumentError(null);
     setDocumentLoading(true);
     setState("showing-document");
+    if (playConfirmation) void queueSelectedDocumentConfirmation(match);
 
     try {
       const response = await fetchJuliaSignedUrl(match.id);
@@ -38,7 +75,7 @@ export function useJuliaDemo() {
     } finally {
       setDocumentLoading(false);
     }
-  }, []);
+  }, [queueSelectedDocumentConfirmation]);
 
   const handleIntent = useCallback((response: JuliaVoiceIntentResponse) => {
     setLastVoiceResponse(response);
@@ -49,21 +86,28 @@ export function useJuliaDemo() {
 
     if (isSilentVoiceIntent(response)) {
       logSilentVoiceIntent(response);
+      setTtsPlayback(null);
       setState("idle");
       return;
     }
 
     if (response.intent === "single_match" && response.matches[0]) {
-      void openDocument(response.matches[0]);
+      setTtsPlayback(playbackFromResponse(response, ["showing-document"]));
+      void openDocument(response.matches[0], {
+        playConfirmation: false,
+        preservePlayback: true,
+      });
       return;
     }
 
     if (response.intent === "multi_match") {
+      setTtsPlayback(playbackFromResponse(response, ["showing-selector"]));
       setSelectorMatches(response.matches);
       setState("showing-selector");
       return;
     }
 
+    setTtsPlayback(null);
     setState("idle");
   }, [openDocument]);
 
@@ -95,10 +139,12 @@ export function useJuliaDemo() {
   }, [voice]);
 
   const closeForeground = useCallback(() => {
+    confirmationRequestRef.current += 1;
     setState("idle");
     setActiveMatch(null);
     setSelectorMatches([]);
     setLastVoiceResponse(null);
+    setTtsPlayback(null);
     setDocumentUrl(null);
     setDocumentError(null);
     setDocumentLoading(false);
@@ -117,17 +163,11 @@ export function useJuliaDemo() {
   }, [cancelListening, state]);
 
   useEffect(() => {
-    if (!["showing-document", "showing-selector"].includes(state)) {
-      return;
-    }
-    if (!lastVoiceResponse?.tts_audio_base64 || !lastVoiceResponse.tts_mime_type) {
+    if (!ttsPlayback || !ttsPlayback.playIn.includes(state)) {
       return;
     }
 
-    const audioUrl = audioUrlFromBase64(
-      lastVoiceResponse.tts_audio_base64,
-      lastVoiceResponse.tts_mime_type,
-    );
+    const audioUrl = audioUrlFromBase64(ttsPlayback.audioBase64, ttsPlayback.mimeType);
     const audio = new Audio(audioUrl);
     audio.play().catch((err: unknown) => {
       console.log("julia.tts.play_failed", {
@@ -140,7 +180,7 @@ export function useJuliaDemo() {
       audio.pause();
       URL.revokeObjectURL(audioUrl);
     };
-  }, [lastVoiceResponse, state]);
+  }, [state, ttsPlayback]);
 
   return {
     state,
@@ -156,6 +196,18 @@ export function useJuliaDemo() {
     cancelListening,
     closeForeground,
     dismissError: () => setErrorToast(null),
+  };
+}
+
+function playbackFromResponse(
+  response: JuliaVoiceIntentResponse | JuliaVoicePlaybackResponse,
+  playIn: JuliaDemoState[],
+): JuliaTtsPlayback | null {
+  if (!response.tts_audio_base64 || !response.tts_mime_type) return null;
+  return {
+    audioBase64: response.tts_audio_base64,
+    mimeType: response.tts_mime_type,
+    playIn,
   };
 }
 

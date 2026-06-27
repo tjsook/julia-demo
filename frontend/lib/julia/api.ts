@@ -9,6 +9,7 @@ import type {
   JuliaSignedUrlResponse,
   JuliaUploadPayload,
   JuliaVoiceIntentResponse,
+  JuliaVoicePlaybackResponse,
 } from "./types";
 
 const BASE_URL =
@@ -126,4 +127,19 @@ export async function postJuliaVoiceIntent(
     body: form,
   });
   return parseJuliaJson<JuliaVoiceIntentResponse>(res, "Failed to process Julia voice intent.");
+}
+
+export async function postJuliaVoiceDocumentConfirmation(
+  documentId: string,
+): Promise<JuliaVoicePlaybackResponse> {
+  const headers = await dashboardAuthHeaders();
+  const res = await fetch(
+    `${BASE_URL}/julia/voice/documents/${encodeURIComponent(documentId)}/confirmation`,
+    {
+      method: "POST",
+      headers,
+      cache: "no-store",
+    },
+  );
+  return parseJuliaJson<JuliaVoicePlaybackResponse>(res, "Failed to create Julia voice response.");
 }

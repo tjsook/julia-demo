@@ -54,6 +54,13 @@ class JuliaVoiceIntentResponse(BaseModel):
     tts_mime_type: str | None = None
 
 
+class JuliaVoicePlaybackResponse(BaseModel):
+    """Synthesized Julia voice playback audio."""
+
+    tts_audio_base64: str | None = None
+    tts_mime_type: str | None = None
+
+
 class JuliaErrorResponse(BaseModel):
     """Stable Julia error envelope."""
 
