@@ -236,7 +236,7 @@ async def voice_intent(
     if match_result.intent == "single_match" and voice_matches:
         try:
             tts_audio, tts_mime_type = openai_service.synthesize_speech(
-                text=f"Here's the {voice_matches[0].title}.",
+                text=f"Here's the {voice_matches[0].title} document.",
             )
             tts_audio_base64 = base64.b64encode(tts_audio).decode("ascii")
         except JuliaOpenAIError as exc:
