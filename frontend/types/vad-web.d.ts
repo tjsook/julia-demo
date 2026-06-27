@@ -7,7 +7,7 @@ declare module "@ricky0123/vad-web" {
     onVADMisfire?: () => void;
     positiveSpeechThreshold?: number;
     negativeSpeechThreshold?: number;
-    redemptionFrames?: number;
+    redemptionMs?: number;
   }
 
   export class MicVAD {

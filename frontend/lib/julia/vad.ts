@@ -1,6 +1,7 @@
 import { MicVAD } from "@ricky0123/vad-web";
 
 const JULIA_VAD_ASSET_PATH = "/julia-vad/";
+const JULIA_VAD_SILENCE_MS = 1000;
 
 export type JuliaVad = Pick<MicVAD, "start" | "pause"> & {
   destroy?: () => void;
@@ -13,7 +14,7 @@ export async function createJuliaVad(onSpeechEnd: () => void): Promise<JuliaVad>
       model: "legacy",
       onnxWASMBasePath: JULIA_VAD_ASSET_PATH,
       onSpeechEnd: () => onSpeechEnd(),
-      redemptionFrames: 24,
+      redemptionMs: JULIA_VAD_SILENCE_MS,
     });
   } catch (err) {
     throw new Error(
