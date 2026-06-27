@@ -446,21 +446,46 @@
   text-transform: uppercase;
 }
 
-.demoPlaceholderOverlay {
+.documentModal,
+.selectorOverlay {
   position: absolute;
   inset: 0;
   z-index: 4;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 32px;
-  background: rgba(10, 11, 13, 0.78);
+  background: #0b0c0f;
 }
 
-.demoCloseButton {
-  position: absolute;
-  right: 28px;
-  top: 28px;
+.documentModal {
+  display: flex;
+  flex-direction: column;
+}
+
+.documentModalTopbar,
+.selectorHeader {
+  min-height: 72px;
+  padding: 16px 22px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.documentModalTopbar h1,
+.selectorHeader h1 {
+  font-size: 18px;
+  line-height: 1.2;
+  font-weight: 760;
+}
+
+.documentModalEyebrow {
+  margin-bottom: 4px;
+  color: rgba(255, 255, 255, 0.55);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.documentModalClose {
   width: 38px;
   height: 38px;
   border: 1px solid rgba(255, 255, 255, 0.2);
@@ -471,9 +496,111 @@
   align-items: center;
   justify-content: center;
   cursor: pointer;
+  flex-shrink: 0;
 }
 
-.demoPlaceholderPanel {
+.documentStage {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  padding: 18px 28px 46px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.documentStage canvas {
+  max-height: calc(100vh - 150px);
+  width: auto !important;
+  height: auto !important;
+  border-radius: 2px;
+  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.45);
+}
+
+.documentState,
+.documentError {
+  width: min(620px, calc(100vw - 80px));
+  min-height: 240px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 8px;
+  background: #15171c;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  color: rgba(255, 255, 255, 0.72);
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.documentError {
+  color: #fecaca;
+  border-color: rgba(248, 113, 113, 0.4);
+}
+
+.documentNavButton {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 48px;
+  height: 64px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.08);
+  color: #ffffff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  opacity: 0.28;
+  transition: opacity 0.16s, background 0.16s;
+}
+
+.documentStage:hover .documentNavButton,
+.documentNavButton:focus-visible {
+  opacity: 1;
+}
+
+.documentNavButton:disabled {
+  opacity: 0;
+  cursor: default;
+}
+
+.documentNavPrevious {
+  left: 24px;
+}
+
+.documentNavNext {
+  right: 24px;
+}
+
+.documentPageCount {
+  position: absolute;
+  left: 50%;
+  bottom: 18px;
+  transform: translateX(-50%);
+  min-width: 68px;
+  height: 28px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.82);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.selectorOverlay {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 32px;
+  background: rgba(10, 11, 13, 0.78);
+}
+
+.selectorPanel {
   width: min(560px, calc(100vw - 48px));
   border: 1px solid rgba(255, 255, 255, 0.16);
   border-radius: 8px;
@@ -482,28 +609,36 @@
   box-shadow: 0 24px 70px rgba(0, 0, 0, 0.35);
 }
 
-.demoPlaceholderPanel h1 {
-  font-size: 28px;
-  line-height: 1.2;
+.selectorHeader {
+  padding: 20px 22px;
 }
 
-.demoPlaceholderEyebrow {
-  margin-bottom: 8px;
-  color: rgba(255, 255, 255, 0.58);
-  font-size: 12px;
-  font-weight: 800;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+.selectorList {
+  display: flex;
+  flex-direction: column;
 }
 
-.demoSelectorPreviewItem {
-  min-height: 42px;
+.selectorItem {
+  width: 100%;
+  min-height: 58px;
+  border: 0;
   border-top: 1px solid rgba(255, 255, 255, 0.1);
+  background: transparent;
+  color: rgba(255, 255, 255, 0.9);
   display: flex;
   align-items: center;
-  color: rgba(255, 255, 255, 0.88);
+  gap: 12px;
+  padding: 0 22px;
   font-size: 15px;
   font-weight: 700;
+  text-align: left;
+  cursor: pointer;
+}
+
+.selectorItem:hover,
+.selectorItem:focus-visible {
+  background: rgba(255, 255, 255, 0.08);
+  outline: none;
 }
 
 .juliaToast {

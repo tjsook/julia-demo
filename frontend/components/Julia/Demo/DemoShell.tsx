@@ -1,8 +1,8 @@
-import { X } from "lucide-react";
-
 import type { JuliaDemoState } from "../../../hooks/julia/useJuliaDemo";
 import type { JuliaVoiceMatch } from "../../../lib/julia/types";
 import s from "../../../styles/julia.module.css";
+import { DocumentModal } from "./DocumentModal";
+import { DocumentSelector } from "./DocumentSelector";
 import { ErrorToast } from "./ErrorToast";
 import { JuliaOrb } from "./JuliaOrb";
 
@@ -11,7 +11,11 @@ type DemoShellProps = {
   errorToast: string | null;
   activeMatch: JuliaVoiceMatch | null;
   selectorMatches: JuliaVoiceMatch[];
+  documentUrl: string | null;
+  documentLoading: boolean;
+  documentError: string | null;
   onOrbClick: () => void;
+  onSelectMatch: (match: JuliaVoiceMatch) => void;
   onCloseForeground: () => void;
   onDismissError: () => void;
 };
@@ -29,7 +33,11 @@ export function DemoShell({
   errorToast,
   activeMatch,
   selectorMatches,
+  documentUrl,
+  documentLoading,
+  documentError,
   onOrbClick,
+  onSelectMatch,
   onCloseForeground,
   onDismissError,
 }: DemoShellProps) {
@@ -40,33 +48,22 @@ export function DemoShell({
         <div className={s.demoStatus}>{statusLabel[state]}</div>
       </div>
 
-      {(state === "showing-document" || state === "showing-selector") && (
-        <section className={s.demoPlaceholderOverlay}>
-          <button
-            type="button"
-            className={s.demoCloseButton}
-            onClick={onCloseForeground}
-            aria-label="Close"
-          >
-            <X size={18} strokeWidth={1.8} />
-          </button>
-          {state === "showing-document" && activeMatch && (
-            <div className={s.demoPlaceholderPanel}>
-              <div className={s.demoPlaceholderEyebrow}>Matched document</div>
-              <h1>{activeMatch.title}</h1>
-            </div>
-          )}
-          {state === "showing-selector" && (
-            <div className={s.demoPlaceholderPanel}>
-              <div className={s.demoPlaceholderEyebrow}>Multiple matches</div>
-              {selectorMatches.map((match) => (
-                <div key={match.id} className={s.demoSelectorPreviewItem}>
-                  {match.title}
-                </div>
-              ))}
-            </div>
-          )}
-        </section>
+      {state === "showing-document" && (
+        <DocumentModal
+          document={activeMatch}
+          signedUrl={documentUrl}
+          loading={documentLoading}
+          error={documentError}
+          onClose={onCloseForeground}
+        />
+      )}
+
+      {state === "showing-selector" && (
+        <DocumentSelector
+          matches={selectorMatches}
+          onSelect={onSelectMatch}
+          onClose={onCloseForeground}
+        />
       )}
 
       <ErrorToast message={errorToast} onDismiss={onDismissError} />

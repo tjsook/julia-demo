@@ -20,7 +20,11 @@ export default function JuliaDemoPage() {
           errorToast={demo.errorToast}
           activeMatch={demo.activeMatch}
           selectorMatches={demo.selectorMatches}
+          documentUrl={demo.documentUrl}
+          documentLoading={demo.documentLoading}
+          documentError={demo.documentError}
           onOrbClick={demo.handleOrbClick}
+          onSelectMatch={(match) => void demo.openDocument(match)}
           onCloseForeground={demo.closeForeground}
           onDismissError={demo.dismissError}
         />

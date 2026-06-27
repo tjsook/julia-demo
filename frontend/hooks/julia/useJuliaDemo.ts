@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 
+import { fetchJuliaSignedUrl } from "../../lib/julia/api";
 import { isSilentVoiceIntent, logSilentVoiceIntent } from "../../lib/julia/intent";
 import type { JuliaVoiceIntentResponse, JuliaVoiceMatch } from "../../lib/julia/types";
 import { useJuliaVoice } from "./useJuliaVoice";
@@ -17,11 +18,34 @@ export function useJuliaDemo() {
   const [activeMatch, setActiveMatch] = useState<JuliaVoiceMatch | null>(null);
   const [selectorMatches, setSelectorMatches] = useState<JuliaVoiceMatch[]>([]);
   const [lastVoiceResponse, setLastVoiceResponse] = useState<JuliaVoiceIntentResponse | null>(null);
+  const [documentUrl, setDocumentUrl] = useState<string | null>(null);
+  const [documentLoading, setDocumentLoading] = useState(false);
+  const [documentError, setDocumentError] = useState<string | null>(null);
+
+  const openDocument = useCallback(async (match: JuliaVoiceMatch) => {
+    setActiveMatch(match);
+    setSelectorMatches([]);
+    setDocumentUrl(null);
+    setDocumentError(null);
+    setDocumentLoading(true);
+    setState("showing-document");
+
+    try {
+      const response = await fetchJuliaSignedUrl(match.id);
+      setDocumentUrl(response.signed_url);
+    } catch (err) {
+      setDocumentError(err instanceof Error ? err.message : "Failed to load document.");
+    } finally {
+      setDocumentLoading(false);
+    }
+  }, []);
 
   const handleIntent = useCallback((response: JuliaVoiceIntentResponse) => {
     setLastVoiceResponse(response);
     setActiveMatch(null);
     setSelectorMatches([]);
+    setDocumentUrl(null);
+    setDocumentError(null);
 
     if (isSilentVoiceIntent(response)) {
       logSilentVoiceIntent(response);
@@ -30,8 +54,7 @@ export function useJuliaDemo() {
     }
 
     if (response.intent === "single_match" && response.matches[0]) {
-      setActiveMatch(response.matches[0]);
-      setState("showing-document");
+      void openDocument(response.matches[0]);
       return;
     }
 
@@ -42,7 +65,7 @@ export function useJuliaDemo() {
     }
 
     setState("idle");
-  }, []);
+  }, [openDocument]);
 
   const handleError = useCallback((message: string) => {
     setErrorToast(message || "Something went wrong.");
@@ -76,6 +99,9 @@ export function useJuliaDemo() {
     setActiveMatch(null);
     setSelectorMatches([]);
     setLastVoiceResponse(null);
+    setDocumentUrl(null);
+    setDocumentError(null);
+    setDocumentLoading(false);
   }, []);
 
   useEffect(() => {
@@ -96,7 +122,11 @@ export function useJuliaDemo() {
     activeMatch,
     selectorMatches,
     lastVoiceResponse,
+    documentUrl,
+    documentLoading,
+    documentError,
     handleOrbClick,
+    openDocument,
     cancelListening,
     closeForeground,
     dismissError: () => setErrorToast(null),
