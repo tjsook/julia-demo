@@ -1,0 +1,231 @@
+{
+  "schema_version": "1.0",
+  "honesty_markers_enabled": true,
+  "constants": {
+    "D": {
+      "value": 300,
+      "label": "Operating days per year",
+      "unit": "days",
+      "calibrated": false
+    },
+    "R": {
+      "value": 1800,
+      "label": "Average revenue per load",
+      "unit": "usd",
+      "calibrated": false
+    },
+    "Up": {
+      "value": 0.015,
+      "label": "Utilization uplift from matching",
+      "unit": "ratio",
+      "calibrated": false
+    },
+    "Di": {
+      "value": 0.18,
+      "label": "Loads with billable detention",
+      "unit": "ratio",
+      "calibrated": false
+    },
+    "Hb": {
+      "value": 1.5,
+      "label": "Billable detention hours per event",
+      "unit": "hours",
+      "calibrated": false
+    },
+    "Dr": {
+      "value": 50,
+      "label": "Detention rate per hour",
+      "unit": "usd_per_hour",
+      "calibrated": false
+    },
+    "Lc": {
+      "value": 55000,
+      "label": "Loaded annual cost per office head",
+      "unit": "usd",
+      "calibrated": false
+    },
+    "Oa": {
+      "value": 0.3,
+      "label": "Office labor automated share",
+      "unit": "ratio",
+      "calibrated": false
+    },
+    "G": {
+      "value": 16000,
+      "label": "Gallons per truck per year",
+      "unit": "gallons",
+      "calibrated": false
+    },
+    "Fg": {
+      "value": 0.3,
+      "label": "Fuel discount gap per gallon",
+      "unit": "usd_per_gallon",
+      "calibrated": false
+    },
+    "Pr": {
+      "value": 100,
+      "label": "Hemut price per truck per month",
+      "unit": "usd",
+      "calibrated": false
+    }
+  },
+  "derivation_rules": {
+    "S": {
+      "kind": "flat",
+      "value": 0.5,
+      "source": "industry midpoint"
+    },
+    "P": {
+      "kind": "linear",
+      "multiplier": 0.142857,
+      "divisor": 7,
+      "min": 1,
+      "round": "ceil",
+      "source": "manual capacity ~5-8 trucks/dispatcher"
+    },
+    "Ld": {
+      "kind": "linear",
+      "multiplier": 1.3,
+      "source": "MD example anchor"
+    },
+    "Du": {
+      "kind": "flat",
+      "value": 0.5,
+      "source": "ATRI uncollected detention"
+    }
+  },
+  "pain_points": [
+    {
+      "id": "spot_freight_winrate",
+      "label": "Spot freight win-rate",
+      "threshold": 0.65,
+      "equation_id": "E1",
+      "trigger_phrases": [
+        "losing tenders",
+        "brokers outbid us",
+        "slow on quotes",
+        "spot freight",
+        "win rate"
+      ]
+    },
+    {
+      "id": "detention_not_billed",
+      "label": "Detention not getting billed",
+      "threshold": 0.6,
+      "equation_id": "E2",
+      "trigger_phrases": [
+        "drivers waiting at docks",
+        "not billing detention",
+        "stuck collecting",
+        "dock wait"
+      ]
+    },
+    {
+      "id": "office_labor_high",
+      "label": "Office labor too high",
+      "threshold": 0.75,
+      "equation_id": "E3",
+      "trigger_phrases": [
+        "too many people in the office",
+        "office staff is huge",
+        "need to free dispatchers"
+      ]
+    },
+    {
+      "id": "voice_phone_overload",
+      "label": "Voice / phone work overload",
+      "threshold": 0.65,
+      "equation_id": "E3a",
+      "trigger_phrases": [
+        "answering calls all day",
+        "after-hours coverage",
+        "phone work"
+      ]
+    },
+    {
+      "id": "order_entry_rekeying",
+      "label": "Order entry / re-keying",
+      "threshold": 0.65,
+      "equation_id": "E3b",
+      "trigger_phrases": [
+        "manual data entry",
+        "typing in loads",
+        "re-keying ratecons"
+      ]
+    },
+    {
+      "id": "invoicing_billing_slow",
+      "label": "Invoicing / billing slow",
+      "threshold": 0.65,
+      "equation_id": "E3c",
+      "trigger_phrases": [
+        "slow to invoice",
+        "AR aging",
+        "DSO is bad"
+      ]
+    },
+    {
+      "id": "fuel_cost_cards",
+      "label": "Fuel cost / fuel cards",
+      "threshold": 0.6,
+      "equation_id": "E4",
+      "trigger_phrases": [
+        "fuel is killing us",
+        "overpaying for diesel",
+        "fuel cards"
+      ]
+    },
+    {
+      "id": "asset_utilization_revenue",
+      "label": "Asset utilization / revenue per truck",
+      "threshold": 0.75,
+      "equation_id": "E5",
+      "trigger_phrases": [
+        "want more out of each truck",
+        "underutilized trucks",
+        "margin pressure"
+      ]
+    }
+  ],
+  "intent_classifier": {
+    "length_threshold": 15,
+    "metric_count_threshold": 2,
+    "metric_vocabulary": [
+      "trucks",
+      "loads",
+      "drivers",
+      "office",
+      "dispatchers",
+      "detention",
+      "spot",
+      "contracted",
+      "fleet",
+      "fuel",
+      "billed",
+      "freight",
+      "dock",
+      "tenders",
+      "miles",
+      "gallons"
+    ],
+    "roi_verb_patterns": [
+      "analyze",
+      "run an analysis",
+      "run analysis",
+      "synthesize a report",
+      "synthesize report",
+      "calculate roi",
+      "do an roi",
+      "do roi",
+      "run the numbers",
+      "give me an analysis"
+    ],
+    "doc_terminal_triggers": [
+      "document",
+      "doc"
+    ]
+  },
+  "extraction": {
+    "numeric_confidence_threshold": 0.8
+  }
+}

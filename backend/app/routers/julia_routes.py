@@ -5,6 +5,7 @@ from __future__ import annotations
 import base64
 import json
 import logging
+import time
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, File, Form, UploadFile
@@ -20,9 +21,12 @@ from app.schemas.julia_models import (
     JuliaVoiceMatch,
     JuliaVoicePlaybackResponse,
 )
+from app.services.julia_calibration_service import JuliaCalibrationError, get_calibration
 from app.services.julia_document_service import JuliaDocumentService, JuliaServiceError
+from app.services.julia_intent_router import IntentClass, classify_intent
 from app.services.julia_matcher import JuliaMatchDocument, select_matches
 from app.services.julia_openai_service import JuliaOpenAIError, JuliaOpenAIService
+from app.services.julia_roi_engine import JuliaROIEngine
 
 router = APIRouter(prefix="/julia", tags=["julia"])
 logger = logging.getLogger(__name__)
@@ -41,6 +45,10 @@ def _openai_service() -> JuliaOpenAIService:
     return JuliaOpenAIService()
 
 
+def _roi_engine() -> JuliaROIEngine:
+    return JuliaROIEngine()
+
+
 def _error_response(exc: JuliaServiceError) -> JSONResponse:
     payload = {"error": exc.code, "detail": exc.detail}
     if exc.extra:
@@ -56,23 +64,32 @@ def _log_voice_intent(
     *,
     transcript: str,
     intent: str,
-    match_count: int,
-    top_score: int,
-    top_doc_id: str | None,
+    token_count: int,
+    metric_count: int,
+    match_count: int = 0,
+    top_score: int = 0,
+    top_doc_id: str | None = None,
+    matched_pain_points: list[str] | None = None,
+    fleet_size_provided: bool | None = None,
+    elapsed_ms: int | None = None,
 ) -> None:
-    logger.info(
-        json.dumps(
-            {
-                "event": "julia.intent",
-                "transcript": transcript,
-                "intent": intent,
-                "match_count": match_count,
-                "top_score": top_score,
-                "top_doc_id": top_doc_id,
-            },
-            separators=(",", ":"),
-        )
-    )
+    payload: dict[str, object] = {
+        "event": "julia.intent",
+        "transcript": transcript,
+        "intent": intent,
+        "token_count": token_count,
+        "metric_count": metric_count,
+        "match_count": match_count,
+        "top_score": top_score,
+        "top_doc_id": top_doc_id,
+    }
+    if matched_pain_points is not None:
+        payload["matched_pain_points"] = matched_pain_points
+    if fleet_size_provided is not None:
+        payload["fleet_size_provided"] = fleet_size_provided
+    if elapsed_ms is not None:
+        payload["elapsed_ms"] = elapsed_ms
+    logger.info(json.dumps(payload, separators=(",", ":")))
 
 
 def _voice_documents(rows: list[dict]) -> list[JuliaMatchDocument]:
@@ -236,6 +253,7 @@ async def voice_intent(
     _user: Annotated[DashboardUser, Depends(require_dashboard_user)],
 ) -> JuliaVoiceIntentResponse | JSONResponse:
     """Transcribe a voice utterance and match it to active Julia documents."""
+    started_at = time.perf_counter()
     audio_bytes = await audio.read()
     if len(audio_bytes) > MAX_VOICE_AUDIO_BYTES:
         return _julia_error(413, "audio_too_large", "Audio must be 25 MB or smaller.")
@@ -251,48 +269,143 @@ async def voice_intent(
         return _julia_error(502, "transcription_failed", exc.detail)
 
     try:
-        document_rows = _service().list_documents("active")
-    except JuliaServiceError as exc:
-        return _error_response(exc)
+        calibration = get_calibration()
+    except JuliaCalibrationError as exc:
+        return _julia_error(500, exc.code, exc.detail)
 
-    match_result = select_matches(transcript, _voice_documents(document_rows))
-    voice_matches = [
-        JuliaVoiceMatch(id=match.document["id"], title=match.document["title"])
-        for match in match_result.matches
-    ]
-    tts_audio_base64: str | None = None
-    tts_mime_type: str | None = None
+    classified = classify_intent(transcript, calibration.intent_classifier)
 
-    if match_result.intent == "single_match" and voice_matches:
-        tts_audio_base64, tts_mime_type = _synthesize_voice_response(
-            openai_service,
-            text=f"Here's the {voice_matches[0].title} document.",
-            doc_id=voice_matches[0].id,
+    if classified.intent == IntentClass.DOC_RETRIEVAL:
+        try:
+            document_rows = _service().list_documents("active")
+        except JuliaServiceError as exc:
+            return _error_response(exc)
+
+        match_result = select_matches(transcript, _voice_documents(document_rows))
+        voice_matches = [
+            JuliaVoiceMatch(id=match.document["id"], title=match.document["title"])
+            for match in match_result.matches
+        ]
+        tts_audio_base64: str | None = None
+        tts_mime_type: str | None = None
+
+        if match_result.intent == "single_match" and voice_matches:
+            tts_audio_base64, tts_mime_type = _synthesize_voice_response(
+                openai_service,
+                text=f"Here's the {voice_matches[0].title} document.",
+                doc_id=voice_matches[0].id,
+            )
+        elif match_result.intent == "multi_match" and voice_matches:
+            tts_audio_base64, tts_mime_type = _synthesize_voice_response(
+                openai_service,
+                text=MULTI_MATCH_TTS_TEXT,
+                doc_id=voice_matches[0].id,
+            )
+        elif match_result.intent == "no_match":
+            tts_audio_base64, tts_mime_type = _synthesize_voice_response(
+                openai_service,
+                text=NO_MATCH_TTS_TEXT,
+                doc_id=None,
+            )
+
+        _log_voice_intent(
+            transcript=transcript,
+            intent=match_result.intent,
+            token_count=classified.token_count,
+            metric_count=classified.metric_count,
+            match_count=len(voice_matches),
+            top_score=match_result.top_score,
+            top_doc_id=voice_matches[0].id if voice_matches else None,
+            elapsed_ms=int((time.perf_counter() - started_at) * 1000),
         )
-    elif match_result.intent == "multi_match" and voice_matches:
-        tts_audio_base64, tts_mime_type = _synthesize_voice_response(
-            openai_service,
-            text=MULTI_MATCH_TTS_TEXT,
-            doc_id=voice_matches[0].id,
+        return JuliaVoiceIntentResponse(
+            transcript=transcript,
+            intent=match_result.intent,
+            matches=voice_matches,
+            tts_audio_base64=tts_audio_base64,
+            tts_mime_type=tts_mime_type,
         )
-    elif match_result.intent == "no_match":
-        tts_audio_base64, tts_mime_type = _synthesize_voice_response(
-            openai_service,
-            text=NO_MATCH_TTS_TEXT,
-            doc_id=None,
+
+    if classified.intent == IntentClass.UNKNOWN:
+        logger.info(
+            json.dumps(
+                {
+                    "event": "julia.intent.unknown",
+                    "transcript": transcript,
+                    "token_count": classified.token_count,
+                    "metric_count": classified.metric_count,
+                },
+                separators=(",", ":"),
+            )
         )
+        _log_voice_intent(
+            transcript=transcript,
+            intent="non_doc",
+            token_count=classified.token_count,
+            metric_count=classified.metric_count,
+            elapsed_ms=int((time.perf_counter() - started_at) * 1000),
+        )
+        return JuliaVoiceIntentResponse(transcript=transcript, intent="non_doc", matches=[])
+
+    try:
+        extraction = openai_service.extract_roi_brief(
+            transcript=transcript,
+            calibration=calibration,
+        )
+    except JuliaOpenAIError as exc:
+        return _julia_error(502, "extraction_failed", exc.detail)
+
+    engine_result = _roi_engine().evaluate_roi(extraction=extraction, calibration=calibration)
+    if engine_result.pending is not None:
+        _log_voice_intent(
+            transcript=transcript,
+            intent="roi_pending_input",
+            token_count=classified.token_count,
+            metric_count=classified.metric_count,
+            matched_pain_points=[pain.id for pain in extraction.matched_pain_points],
+            fleet_size_provided=False,
+            elapsed_ms=int((time.perf_counter() - started_at) * 1000),
+        )
+        return JuliaVoiceIntentResponse(
+            transcript=transcript,
+            intent="roi_pending_input",
+            matches=[],
+            roi_pending=engine_result.pending,
+        )
+
+    payload = engine_result.payload
+    if payload is None:
+        return _julia_error(
+            500,
+            "roi_engine_invalid_state",
+            "ROI engine returned neither pending input nor payload.",
+        )
+
+    tts_text = (
+        f"Here's the ROI analysis for {payload.company_name}."
+        if payload.company_name
+        else "Here's the ROI analysis."
+    )
+    tts_audio_base64, tts_mime_type = _synthesize_voice_response(
+        openai_service,
+        text=tts_text,
+        doc_id=None,
+    )
 
     _log_voice_intent(
         transcript=transcript,
-        intent=match_result.intent,
-        match_count=len(voice_matches),
-        top_score=match_result.top_score,
-        top_doc_id=voice_matches[0].id if voice_matches else None,
+        intent="roi_analysis",
+        token_count=classified.token_count,
+        metric_count=classified.metric_count,
+        matched_pain_points=[pain.id for pain in payload.matched_pain_points],
+        fleet_size_provided=True,
+        elapsed_ms=int((time.perf_counter() - started_at) * 1000),
     )
     return JuliaVoiceIntentResponse(
         transcript=transcript,
-        intent=match_result.intent,
-        matches=voice_matches,
+        intent="roi_analysis",
+        matches=[],
+        roi_payload=payload,
         tts_audio_base64=tts_audio_base64,
         tts_mime_type=tts_mime_type,
     )
