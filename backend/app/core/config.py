@@ -74,6 +74,7 @@ class Settings(BaseSettings):
     OPENAI_STT_MODEL: str = "gpt-4o-mini-transcribe"
     OPENAI_TTS_MODEL: str = "gpt-4o-mini-tts"
     OPENAI_TTS_VOICE: str = "marin"
+    OPENAI_EXTRACTION_MODEL: str = "gpt-4o-mini"
 
     # Phase 2.6 Event Detection
     EVENT_LAPSED_DAYS: int = 7

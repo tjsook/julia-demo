@@ -7,6 +7,8 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict
 
+from app.schemas.julia_roi_models import JuliaROIAnalysisPayload, JuliaROIPendingInput
+
 
 class JuliaDocumentResponse(BaseModel):
     """Frontend-safe Julia document metadata."""
@@ -48,8 +50,17 @@ class JuliaVoiceIntentResponse(BaseModel):
     """Intent and document matches from a Julia voice utterance."""
 
     transcript: str
-    intent: Literal["single_match", "multi_match", "no_match", "non_doc"]
+    intent: Literal[
+        "single_match",
+        "multi_match",
+        "no_match",
+        "non_doc",
+        "roi_analysis",
+        "roi_pending_input",
+    ]
     matches: list[JuliaVoiceMatch]
+    roi_payload: JuliaROIAnalysisPayload | None = None
+    roi_pending: JuliaROIPendingInput | None = None
     tts_audio_base64: str | None = None
     tts_mime_type: str | None = None
 
