@@ -11,6 +11,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, File, Form, UploadFile
 from fastapi.responses import JSONResponse, Response
 
+from app.core.config import get_settings
 from app.dependencies.dashboard_auth import DashboardUser, require_dashboard_user
 from app.schemas.julia_models import (
     JuliaDocumentList,
@@ -30,11 +31,18 @@ from app.services.julia_roi_engine import JuliaROIEngine
 
 router = APIRouter(prefix="/julia", tags=["julia"])
 logger = logging.getLogger(__name__)
-MAX_VOICE_AUDIO_BYTES = 25 * 1024 * 1024
 MULTI_MATCH_TTS_TEXT = (
     "I found multiple documents of that type. Which one do you want me to pull up?"
 )
 NO_MATCH_TTS_TEXT = "I could not find that. Narrow down your query."
+
+
+def _max_voice_audio_mb() -> int:
+    return get_settings().JULIA_VOICE_AUDIO_MAX_MB
+
+
+def _max_voice_audio_bytes() -> int:
+    return _max_voice_audio_mb() * 1024 * 1024
 
 
 def _service() -> JuliaDocumentService:
@@ -255,8 +263,9 @@ async def voice_intent(
     """Transcribe a voice utterance and match it to active Julia documents."""
     started_at = time.perf_counter()
     audio_bytes = await audio.read()
-    if len(audio_bytes) > MAX_VOICE_AUDIO_BYTES:
-        return _julia_error(413, "audio_too_large", "Audio must be 25 MB or smaller.")
+    max_audio_mb = _max_voice_audio_mb()
+    if len(audio_bytes) > _max_voice_audio_bytes():
+        return _julia_error(413, "audio_too_large", f"Audio must be {max_audio_mb} MB or smaller.")
 
     try:
         openai_service = _openai_service()
