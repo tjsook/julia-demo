@@ -24,7 +24,7 @@ INPUT_SYMBOLS: tuple[str, ...] = ("T", "S", "P", "Ld", "Du")
 
 EquationId = Literal["E1", "E2", "E3", "E3a", "E3b", "E3c", "E4", "E5"]
 InputSymbol = Literal["T", "S", "P", "Ld", "Du"]
-InputSource = Literal["rep", "derived", "default"]
+InputSource = Literal["rep", "rep_qualitative", "derived", "default"]
 
 
 class JuliaCalibrationConstant(BaseModel):
@@ -83,6 +83,49 @@ class JuliaExtractionConfig(BaseModel):
     numeric_confidence_threshold: float = Field(ge=0.0, le=1.0)
 
 
+class JuliaQualitativeBucketsS(BaseModel):
+    """Bucket values for S qualitative extraction tags."""
+
+    strongly_contracted: float = Field(ge=0.0, le=1.0)
+    mostly_contracted: float = Field(ge=0.0, le=1.0)
+    balanced: float = Field(ge=0.0, le=1.0)
+    mostly_spot: float = Field(ge=0.0, le=1.0)
+    strongly_spot: float = Field(ge=0.0, le=1.0)
+
+
+class JuliaQualitativeBucketsDu(BaseModel):
+    """Bucket values for Du qualitative extraction tags."""
+
+    fully_billed: float = Field(ge=0.0, le=1.0)
+    mostly_collected: float = Field(ge=0.0, le=1.0)
+    partial: float = Field(ge=0.0, le=1.0)
+    mostly_uncaptured: float = Field(ge=0.0, le=1.0)
+    barely_collected: float = Field(ge=0.0, le=1.0)
+
+
+class JuliaQualitativeBucketsConfig(BaseModel):
+    """Calibration-backed qualitative-to-numeric mappings for S and Du."""
+
+    S: JuliaQualitativeBucketsS
+    Du: JuliaQualitativeBucketsDu
+
+
+class JuliaEvidenceVerificationNormalize(BaseModel):
+    """Normalization options used during pain-point evidence checks."""
+
+    lowercase: bool = True
+    strip_punctuation: bool = True
+    collapse_whitespace: bool = True
+
+
+class JuliaEvidenceVerificationConfig(BaseModel):
+    """Pain-point evidence verification controls."""
+
+    enabled: bool = True
+    min_length_chars: int = Field(ge=1)
+    normalize: JuliaEvidenceVerificationNormalize
+
+
 class JuliaSanityBand(BaseModel):
     """A soft warning band used for implied-ratio honesty markers."""
 
@@ -118,6 +161,8 @@ class JuliaCalibrationModel(BaseModel):
     pain_points: list[JuliaPainPointConfig]
     intent_classifier: JuliaIntentClassifierConfig
     extraction: JuliaExtractionConfig
+    qualitative_buckets: JuliaQualitativeBucketsConfig
+    evidence_verification: JuliaEvidenceVerificationConfig
     sanity_bands: JuliaSanityBandsConfig
 
     @model_validator(mode="after")
@@ -142,14 +187,46 @@ class JuliaExtractedValue(BaseModel):
     confidence: float = Field(ge=0.0, le=1.0)
 
 
+SQualitativeTag = Literal[
+    "strongly_contracted",
+    "mostly_contracted",
+    "balanced",
+    "mostly_spot",
+    "strongly_spot",
+]
+DuQualitativeTag = Literal[
+    "fully_billed",
+    "mostly_collected",
+    "partial",
+    "mostly_uncaptured",
+    "barely_collected",
+]
+
+
+class JuliaExtractedSValue(BaseModel):
+    """One model-extracted S candidate via numeric value or qualitative tag."""
+
+    value: float | None = Field(default=None, ge=0.0, le=1.0)
+    qualitative_tag: SQualitativeTag | None = None
+    confidence: float = Field(ge=0.0, le=1.0)
+
+
+class JuliaExtractedDuValue(BaseModel):
+    """One model-extracted Du candidate via numeric value or qualitative tag."""
+
+    value: float | None = Field(default=None, ge=0.0, le=1.0)
+    qualitative_tag: DuQualitativeTag | None = None
+    confidence: float = Field(ge=0.0, le=1.0)
+
+
 class JuliaExtractionVariables(BaseModel):
     """Numerical variables extracted from one transcript."""
 
     T: JuliaExtractedValue | None = None
-    S: JuliaExtractedValue | None = None
+    S: JuliaExtractedSValue | None = None
     P: JuliaExtractedValue | None = None
     Ld: JuliaExtractedValue | None = None
-    Du: JuliaExtractedValue | None = None
+    Du: JuliaExtractedDuValue | None = None
 
 
 class JuliaPainPointMatch(BaseModel):
@@ -182,6 +259,7 @@ class JuliaResolvedInput(BaseModel):
     value: float
     source: InputSource
     confidence: float | None = None
+    qualitative_tag: SQualitativeTag | DuQualitativeTag | None = None
     rule: str | None = None
 
 

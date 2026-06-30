@@ -355,7 +355,11 @@ async def voice_intent(
     except JuliaOpenAIError as exc:
         return _julia_error(502, "extraction_failed", exc.detail)
 
-    engine_result = _roi_engine().evaluate_roi(extraction=extraction, calibration=calibration)
+    engine_result = _roi_engine().evaluate_roi(
+        transcript=transcript,
+        extraction=extraction,
+        calibration=calibration,
+    )
     if engine_result.pending is not None:
         _log_voice_intent(
             transcript=transcript,

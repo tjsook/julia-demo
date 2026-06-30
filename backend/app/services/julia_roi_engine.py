@@ -79,6 +79,7 @@ class JuliaROIEngine:
     def evaluate_roi(
         self,
         *,
+        transcript: str,
         extraction: JuliaROIExtractionResult,
         calibration: JuliaCalibrationModel,
     ) -> JuliaROIEngineResult:
@@ -102,8 +103,17 @@ class JuliaROIEngine:
                 )
             )
 
+        verified_pain_points, evidence_markers = self._verify_pain_point_evidence(
+            transcript=transcript,
+            pain_point_matches=extraction.matched_pain_points,
+            calibration=calibration,
+        )
+        thresholded_pain_points, threshold_markers = self._threshold_filter_pain_points(
+            pain_point_matches=verified_pain_points,
+            calibration=calibration,
+        )
         equations_to_run, matched_pain_points = self._selected_equations(
-            extraction.matched_pain_points,
+            thresholded_pain_points,
             calibration,
         )
         equation_results = [
@@ -113,7 +123,7 @@ class JuliaROIEngine:
 
         gross_annual_value = sum(result.result for result in equation_results)
         hemut_cost_per_year = inputs["T"].value * calibration.constants["Pr"].value * 12
-        net_annual_value = gross_annual_value - hemut_cost_per_year
+        net_annual_value = gross_annual_value
         roi_multiple = 0.0 if hemut_cost_per_year == 0 else gross_annual_value / hemut_cost_per_year
 
         summary = JuliaROISummary(
@@ -128,6 +138,7 @@ class JuliaROIEngine:
             equation_results=equation_results,
             calibration=calibration,
             range_rejections=range_rejections,
+            pain_point_drop_markers=[*evidence_markers, *threshold_markers],
         )
 
         return JuliaROIEngineResult(
@@ -155,12 +166,12 @@ class JuliaROIEngine:
             t_value = None
 
         s_value = variables.S
-        if s_value is not None and (s_value.value < 0 or s_value.value > 1):
+        if s_value is not None and s_value.value is not None and (s_value.value < 0 or s_value.value > 1):
             range_rejections["S"] = (
                 f"S extracted as {_format_number(s_value.value)} but must be between 0 and 1. "
-                "Treated as not provided; defaulted to 50%."
+                "Ignored numeric value and used qualitative/default fallback."
             )
-            s_value = None
+            s_value = s_value.model_copy(update={"value": None})
 
         p_value = variables.P
         if p_value is not None and (
@@ -191,12 +202,12 @@ class JuliaROIEngine:
                     ld_value = None
 
         du_value = variables.Du
-        if du_value is not None and (du_value.value < 0 or du_value.value > 1):
+        if du_value is not None and du_value.value is not None and (du_value.value < 0 or du_value.value > 1):
             range_rejections["Du"] = (
                 f"Du extracted as {_format_number(du_value.value)} but must be between 0 and 1. "
-                "Treated as not provided; defaulted to 50%."
+                "Ignored numeric value and used qualitative/default fallback."
             )
-            du_value = None
+            du_value = du_value.model_copy(update={"value": None})
 
         return (
             JuliaExtractionVariables(
@@ -230,7 +241,7 @@ class JuliaROIEngine:
                 confidence=t_value.confidence,
             )
 
-        resolved["S"] = self._resolve_optional_input(
+        resolved["S"] = self._resolve_qualitative_input(
             symbol="S",
             candidate=variables.S,
             fleet_size=resolved["T"].value if resolved["T"] else None,
@@ -248,13 +259,104 @@ class JuliaROIEngine:
             fleet_size=resolved["T"].value if resolved["T"] else None,
             calibration=calibration,
         )
-        resolved["Du"] = self._resolve_optional_input(
+        resolved["Du"] = self._resolve_qualitative_input(
             symbol="Du",
             candidate=variables.Du,
             fleet_size=resolved["T"].value if resolved["T"] else None,
             calibration=calibration,
         )
         return resolved
+
+    def _verify_pain_point_evidence(
+        self,
+        *,
+        transcript: str,
+        pain_point_matches: list[JuliaPainPointMatch],
+        calibration: JuliaCalibrationModel,
+    ) -> tuple[list[JuliaPainPointMatch], list[str]]:
+        config = calibration.evidence_verification
+        if not config.enabled:
+            return pain_point_matches, []
+
+        normalized_transcript = self._normalize_text(transcript, calibration=calibration)
+        min_length = config.min_length_chars
+        surviving: list[JuliaPainPointMatch] = []
+        dropped_markers: list[str] = []
+
+        for match in pain_point_matches:
+            normalized_evidence = self._normalize_text(match.evidence, calibration=calibration)
+            if len(normalized_evidence) < min_length:
+                dropped_markers.append(
+                    f"Dropped '{match.id}' - evidence too short ({len(normalized_evidence)} chars)."
+                )
+                continue
+            if normalized_evidence not in normalized_transcript:
+                dropped_markers.append(
+                    f"Dropped '{match.id}' - LLM-supplied evidence not present in transcript."
+                )
+                continue
+            surviving.append(match)
+
+        return surviving, dropped_markers
+
+    def _threshold_filter_pain_points(
+        self,
+        *,
+        pain_point_matches: list[JuliaPainPointMatch],
+        calibration: JuliaCalibrationModel,
+    ) -> tuple[list[JuliaPainPointMatch], list[str]]:
+        thresholds = {pain.id: pain.threshold for pain in calibration.pain_points}
+        surviving: list[JuliaPainPointMatch] = []
+        dropped_markers: list[str] = []
+
+        for match in pain_point_matches:
+            threshold = thresholds.get(match.id)
+            if threshold is None:
+                continue
+            if match.confidence < threshold:
+                dropped_markers.append(
+                    f"Dropped '{match.id}' - confidence {match.confidence:.2f} below threshold {threshold:.2f}."
+                )
+                continue
+            surviving.append(match)
+
+        return surviving, dropped_markers
+
+    def _resolve_qualitative_input(
+        self,
+        *,
+        symbol: str,
+        candidate,
+        fleet_size: float | None,
+        calibration: JuliaCalibrationModel,
+    ) -> JuliaResolvedInput:
+        if candidate is not None:
+            if candidate.value is not None:
+                return JuliaResolvedInput(
+                    value=float(candidate.value),
+                    source="rep",
+                    confidence=candidate.confidence,
+                )
+            if candidate.qualitative_tag:
+                buckets = (
+                    calibration.qualitative_buckets.S.model_dump()
+                    if symbol == "S"
+                    else calibration.qualitative_buckets.Du.model_dump()
+                )
+                if candidate.qualitative_tag in buckets:
+                    return JuliaResolvedInput(
+                        value=float(buckets[candidate.qualitative_tag]),
+                        source="rep_qualitative",
+                        confidence=candidate.confidence,
+                        qualitative_tag=candidate.qualitative_tag,
+                    )
+
+        return self._resolve_optional_input(
+            symbol=symbol,
+            candidate=None,
+            fleet_size=fleet_size,
+            calibration=calibration,
+        )
 
     def _resolve_optional_input(
         self,
@@ -427,21 +529,32 @@ class JuliaROIEngine:
         equation_results: list[JuliaEquationResult],
         calibration: JuliaCalibrationModel,
         range_rejections: dict[str, str],
+        pain_point_drop_markers: list[str],
     ) -> list[str]:
-        markers: list[str] = []
+        markers: list[str] = [*pain_point_drop_markers]
 
         s = _required_input_obj(inputs, "S")
-        if s.source == "default":
-            if "S" in range_rejections:
-                markers.append(range_rejections["S"])
-            else:
-                markers.append("S (% spot) defaulted to 50% — rep did not specify.")
+        if "S" in range_rejections:
+            markers.append(range_rejections["S"])
+        if s.source == "rep_qualitative" and s.qualitative_tag:
+            markers.append(
+                f"S inferred from rep phrasing -> '{s.qualitative_tag}' ({s.value:.2f}). "
+                "Override if more precise data is known."
+            )
+        elif s.source == "default":
+            if "S" not in range_rejections:
+                markers.append("S (% spot) defaulted to 10% — rep did not specify.")
 
         du = _required_input_obj(inputs, "Du")
-        if du.source == "default":
-            if "Du" in range_rejections:
-                markers.append(range_rejections["Du"])
-            else:
+        if "Du" in range_rejections:
+            markers.append(range_rejections["Du"])
+        if du.source == "rep_qualitative" and du.qualitative_tag:
+            markers.append(
+                f"Du inferred from rep phrasing -> '{du.qualitative_tag}' ({du.value:.2f}). "
+                "Override if more precise data is known."
+            )
+        elif du.source == "default":
+            if "Du" not in range_rejections:
                 markers.append("Du (% detention uncaptured) defaulted to 50% — rep did not specify.")
 
         p = _required_input_obj(inputs, "P")
@@ -457,8 +570,11 @@ class JuliaROIEngine:
             if "Ld" in range_rejections:
                 markers.append(range_rejections["Ld"])
             else:
+                ld_multiplier = calibration.derivation_rules["Ld"].multiplier
+                if ld_multiplier is None:
+                    raise ValueError('Derivation rule for "Ld" is missing required "multiplier".')
                 markers.append(
-                    f"Ld (loads/day) derived from T ({_required_input(inputs, 'T'):g} × 1.3 = {ld.value:g})."
+                    f"Ld (loads/day) derived from T ({_required_input(inputs, 'T'):g} × {ld_multiplier:g} = {ld.value:g})."
                 )
 
         markers.extend(self._implied_ratio_markers(inputs=inputs, calibration=calibration))
@@ -480,6 +596,22 @@ class JuliaROIEngine:
                 )
 
         return markers if calibration.honesty_markers_enabled else []
+
+    def _normalize_text(self, text: str, *, calibration: JuliaCalibrationModel) -> str:
+        normalized = text
+        normalize_config = calibration.evidence_verification.normalize
+
+        if normalize_config.lowercase:
+            normalized = normalized.lower()
+
+        if normalize_config.strip_punctuation:
+            punctuation_table = str.maketrans({char: " " for char in ".,!?;:'\"()[]-/\\"})
+            normalized = normalized.translate(punctuation_table)
+
+        if normalize_config.collapse_whitespace:
+            normalized = " ".join(normalized.split())
+
+        return normalized.strip()
 
     def _implied_ratio_markers(
         self,

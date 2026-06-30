@@ -11,6 +11,8 @@ import httpx
 from app.core.config import get_settings
 from app.schemas.julia_roi_models import (
     JuliaCalibrationModel,
+    JuliaExtractedDuValue,
+    JuliaExtractedSValue,
     JuliaExtractedValue,
     JuliaExtractionVariables,
     JuliaROIExtractionLLMResponse,
@@ -143,6 +145,8 @@ class JuliaOpenAIService:
         }
 
         pain_points = calibration.pain_points
+        s_bucket_enum = list(calibration.qualitative_buckets.S.model_dump().keys())
+        du_bucket_enum = list(calibration.qualitative_buckets.Du.model_dump().keys())
         schema = {
             "type": "object",
             "additionalProperties": False,
@@ -166,10 +170,10 @@ class JuliaOpenAIService:
                     "additionalProperties": False,
                     "properties": {
                         "T": _positive_number_var_schema(max_value=10000),
-                        "S": _fraction_var_schema(),
+                        "S": _qualitative_fraction_var_schema(bucket_enum=s_bucket_enum),
                         "P": _positive_number_var_schema(max_value=5000),
                         "Ld": _positive_number_var_schema(max_value=10000),
-                        "Du": _fraction_var_schema(),
+                        "Du": _qualitative_fraction_var_schema(bucket_enum=du_bucket_enum),
                     },
                     "required": ["T", "S", "P", "Ld", "Du"],
                 },
@@ -188,7 +192,14 @@ class JuliaOpenAIService:
                     "- Return null for any variable not explicitly stated as a specific number or percentage.\n"
                     "- Never invent numbers from related sentences.\n"
                     "- S and Du are decimal fractions in the range [0, 1]. Values outside [0,1] are invalid.\n"
-                    "- Cap reported confidence at 0.95. Never use 1.0."
+                    "- Cap reported confidence at 0.95. Never use 1.0.\n\n"
+                    "PAIN POINT EXTRACTION RULES:\n"
+                    "1. Default to OMITTING pain points. Only include a pain point if the rep explicitly "
+                    "mentioned the underlying issue in the transcript.\n"
+                    "2. The evidence field for each pain point MUST be a verbatim substring from the transcript "
+                    "- not a paraphrase, not the trigger phrase from the context list. If you cannot point to "
+                    "specific words the rep said, do NOT include the pain point.\n"
+                    "3. If you are not sure whether the rep mentioned a pain point, omit it."
                 ),
             },
             {
@@ -211,10 +222,17 @@ class JuliaOpenAIService:
                     "- '100 trucks' -> T = {'value': 100, 'confidence': 0.95}\n"
                     "- 'around 100 trucks' -> T = {'value': 100, 'confidence': 0.85}\n"
                     "- 'a lot of trucks' -> T = null\n"
-                    "S (% spot, MUST be decimal fraction 0-1):\n"
-                    "- '60 percent spot' -> S = {'value': 0.60, 'confidence': 0.95}\n"
-                    "- 'half spot half contracted' -> S = {'value': 0.50, 'confidence': 0.85}\n"
-                    "- 'mostly spot freight' -> S = null\n"
+                    "S (% spot, MUST be decimal fraction 0-1 OR a qualitative_tag):\n"
+                    "Numeric:\n"
+                    "- '60 percent spot' -> S = {'value': 0.60, 'qualitative_tag': null, 'confidence': 0.95}\n"
+                    "- 'split half and half' -> S = {'value': 0.50, 'qualitative_tag': null, 'confidence': 0.85}\n"
+                    "Qualitative tag (when no specific number given):\n"
+                    "- 'mostly spot freight' -> S = {'value': null, 'qualitative_tag': 'mostly_spot', 'confidence': 0.85}\n"
+                    "- 'all spot, no contracts' -> S = {'value': null, 'qualitative_tag': 'strongly_spot', 'confidence': 0.90}\n"
+                    "- 'primarily contracted' -> S = {'value': null, 'qualitative_tag': 'mostly_contracted', 'confidence': 0.85}\n"
+                    "- 'balanced mix' -> S = {'value': null, 'qualitative_tag': 'balanced', 'confidence': 0.80}\n"
+                    "No signal:\n"
+                    "- (no mention of spot vs contracted at all) -> S = null\n"
                     "P (office people):\n"
                     "- '8 in the office' or '8 office people' -> P = {'value': 8, 'confidence': 0.95}\n"
                     "- 'a small team' -> P = null\n"
@@ -222,9 +240,15 @@ class JuliaOpenAIService:
                     "- '150 loads a day' -> Ld = {'value': 150, 'confidence': 0.95}\n"
                     "- 'they run about 150 loads daily' -> Ld = {'value': 150, 'confidence': 0.90}\n"
                     "- 'lots of loads' -> Ld = null\n"
-                    "Du (% detention uncaptured, MUST be decimal fraction 0-1):\n"
-                    "- '70 percent of detention' or '70 percent uncaptured' -> Du = {'value': 0.70, 'confidence': 0.95}\n"
-                    "- 'most detention is not billed' -> Du = null"
+                    "Du (% detention uncaptured, MUST be decimal fraction 0-1 OR a qualitative_tag):\n"
+                    "Numeric:\n"
+                    "- '70 percent uncaptured' -> Du = {'value': 0.70, 'qualitative_tag': null, 'confidence': 0.95}\n"
+                    "Qualitative tag:\n"
+                    "- 'most detention is not billed' -> Du = {'value': null, 'qualitative_tag': 'mostly_uncaptured', 'confidence': 0.85}\n"
+                    "- 'we barely collect any detention' -> Du = {'value': null, 'qualitative_tag': 'barely_collected', 'confidence': 0.90}\n"
+                    "- 'we bill it pretty well' -> Du = {'value': null, 'qualitative_tag': 'mostly_collected', 'confidence': 0.85}\n"
+                    "No signal:\n"
+                    "- (no mention of detention billing rate at all) -> Du = null"
                 ),
             },
         ]
@@ -277,38 +301,33 @@ class JuliaOpenAIService:
             pain.model_copy(update={"confidence": _clamp_confidence(pain.confidence)})
             for pain in structured.pain_points
         ]
-        thresholds = {pain.id: pain.threshold for pain in pain_points}
-        matched = [
-            pain
-            for pain in clamped_pain_points
-            if pain.id in thresholds and pain.confidence >= thresholds[pain.id]
-        ]
 
         numeric_threshold = calibration.extraction.numeric_confidence_threshold
         filtered_variables = JuliaExtractionVariables(
             T=_accept_numeric(structured.variables.T, numeric_threshold),
-            S=_accept_numeric(structured.variables.S, numeric_threshold),
+            S=_accept_qualitative_fraction(structured.variables.S, numeric_threshold),
             P=_accept_numeric(structured.variables.P, numeric_threshold),
             Ld=_accept_numeric(structured.variables.Ld, numeric_threshold),
-            Du=_accept_numeric(structured.variables.Du, numeric_threshold),
+            Du=_accept_qualitative_fraction(structured.variables.Du, numeric_threshold),
         )
 
         return JuliaROIExtractionResult(
             company_name=structured.company_name,
-            matched_pain_points=matched,
+            matched_pain_points=clamped_pain_points,
             variables=filtered_variables,
         )
 
 
-def _fraction_var_schema() -> dict[str, Any]:
+def _qualitative_fraction_var_schema(*, bucket_enum: list[str]) -> dict[str, Any]:
     return {
         "type": ["object", "null"],
         "additionalProperties": False,
         "properties": {
-            "value": {"type": "number", "minimum": 0, "maximum": 1},
+            "value": {"type": ["number", "null"], "minimum": 0, "maximum": 1},
+            "qualitative_tag": {"type": ["string", "null"], "enum": [*bucket_enum, None]},
             "confidence": {"type": "number", "minimum": 0, "maximum": 1},
         },
-        "required": ["value", "confidence"],
+        "required": ["value", "qualitative_tag", "confidence"],
     }
 
 
@@ -325,6 +344,18 @@ def _positive_number_var_schema(*, max_value: float) -> dict[str, Any]:
 
 
 def _accept_numeric(candidate: JuliaExtractedValue | None, threshold: float) -> JuliaExtractedValue | None:
+    if candidate is None:
+        return None
+    clamped = candidate.model_copy(update={"confidence": _clamp_confidence(candidate.confidence)})
+    if clamped.confidence < threshold:
+        return None
+    return clamped
+
+
+def _accept_qualitative_fraction(
+    candidate: JuliaExtractedSValue | JuliaExtractedDuValue | None,
+    threshold: float,
+) -> JuliaExtractedSValue | JuliaExtractedDuValue | None:
     if candidate is None:
         return None
     clamped = candidate.model_copy(update={"confidence": _clamp_confidence(candidate.confidence)})
