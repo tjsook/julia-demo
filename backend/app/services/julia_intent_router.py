@@ -42,9 +42,8 @@ def classify_intent(transcript: str, config: JuliaIntentClassifierConfig) -> Int
     if any(pattern.lower() in lowered_original for pattern in config.roi_verb_patterns):
         return IntentClassification(IntentClass.ROI_ANALYSIS, token_count, metric_count)
 
-    last_token = tokens[-1] if tokens else ""
-    doc_triggers = {token.lower() for token in config.doc_terminal_triggers}
-    if last_token in doc_triggers:
+    doc_triggers = {token.lower() for token in config.doc_word_triggers}
+    if any(token in doc_triggers for token in tokens):
         return IntentClassification(IntentClass.DOC_RETRIEVAL, token_count, metric_count)
 
     return IntentClassification(IntentClass.UNKNOWN, token_count, metric_count)

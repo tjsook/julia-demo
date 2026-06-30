@@ -282,15 +282,56 @@ async def voice_intent(
     except JuliaCalibrationError as exc:
         return _julia_error(500, exc.code, exc.detail)
 
-    classified = classify_intent(transcript, calibration.intent_classifier)
+    normalized_transcript = openai_service.normalize_brand_variants(
+        transcript=transcript,
+        calibration=calibration,
+    )
+    if normalized_transcript != transcript:
+        logger.info(
+            json.dumps(
+                {
+                    "event": "julia.transcript_normalized",
+                    "raw_transcript": transcript,
+                    "normalized_transcript": normalized_transcript,
+                },
+                separators=(",", ":"),
+            )
+        )
+    transcript = normalized_transcript
 
-    if classified.intent == IntentClass.DOC_RETRIEVAL:
+    classified = classify_intent(transcript, calibration.intent_classifier)
+    effective_intent = classified.intent
+    if effective_intent == IntentClass.UNKNOWN:
+        fallback_started_at = time.perf_counter()
+        fallback_intent = openai_service.classify_intent_llm(transcript=transcript)
+        fallback_elapsed_ms = int((time.perf_counter() - fallback_started_at) * 1000)
+        logger.info(
+            json.dumps(
+                {
+                    "event": "julia.intent_fallback",
+                    "transcript": transcript,
+                    "classification": fallback_intent,
+                    "elapsed_ms": fallback_elapsed_ms,
+                },
+                separators=(",", ":"),
+            )
+        )
+        if fallback_intent == "doc_retrieval":
+            effective_intent = IntentClass.DOC_RETRIEVAL
+        elif fallback_intent == "roi_analysis":
+            effective_intent = IntentClass.ROI_ANALYSIS
+
+    if effective_intent == IntentClass.DOC_RETRIEVAL:
         try:
             document_rows = _service().list_documents("active")
         except JuliaServiceError as exc:
             return _error_response(exc)
 
-        match_result = select_matches(transcript, _voice_documents(document_rows))
+        match_result = select_matches(
+            transcript,
+            _voice_documents(document_rows),
+            require_trigger=False,
+        )
         voice_matches = [
             JuliaVoiceMatch(id=match.document["id"], title=match.document["title"])
             for match in match_result.matches
@@ -335,7 +376,7 @@ async def voice_intent(
             tts_mime_type=tts_mime_type,
         )
 
-    if classified.intent == IntentClass.UNKNOWN:
+    if effective_intent == IntentClass.UNKNOWN:
         logger.info(
             json.dumps(
                 {
