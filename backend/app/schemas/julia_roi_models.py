@@ -24,7 +24,7 @@ INPUT_SYMBOLS: tuple[str, ...] = ("T", "S", "P", "Ld", "Du")
 
 EquationId = Literal["E1", "E2", "E3", "E3a", "E3b", "E3c", "E4", "E5"]
 InputSymbol = Literal["T", "S", "P", "Ld", "Du"]
-InputSource = Literal["rep", "derived", "default"]
+InputSource = Literal["rep", "rep_qualitative", "derived", "default"]
 
 
 class JuliaCalibrationConstant(BaseModel):
@@ -259,6 +259,7 @@ class JuliaResolvedInput(BaseModel):
     value: float
     source: InputSource
     confidence: float | None = None
+    qualitative_tag: SQualitativeTag | DuQualitativeTag | None = None
     rule: str | None = None
 
 

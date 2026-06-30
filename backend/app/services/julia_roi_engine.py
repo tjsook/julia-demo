@@ -155,12 +155,12 @@ class JuliaROIEngine:
             t_value = None
 
         s_value = variables.S
-        if s_value is not None and (s_value.value < 0 or s_value.value > 1):
+        if s_value is not None and s_value.value is not None and (s_value.value < 0 or s_value.value > 1):
             range_rejections["S"] = (
                 f"S extracted as {_format_number(s_value.value)} but must be between 0 and 1. "
-                "Treated as not provided; defaulted to 50%."
+                "Ignored numeric value and used qualitative/default fallback."
             )
-            s_value = None
+            s_value = s_value.model_copy(update={"value": None})
 
         p_value = variables.P
         if p_value is not None and (
@@ -191,12 +191,12 @@ class JuliaROIEngine:
                     ld_value = None
 
         du_value = variables.Du
-        if du_value is not None and (du_value.value < 0 or du_value.value > 1):
+        if du_value is not None and du_value.value is not None and (du_value.value < 0 or du_value.value > 1):
             range_rejections["Du"] = (
                 f"Du extracted as {_format_number(du_value.value)} but must be between 0 and 1. "
-                "Treated as not provided; defaulted to 50%."
+                "Ignored numeric value and used qualitative/default fallback."
             )
-            du_value = None
+            du_value = du_value.model_copy(update={"value": None})
 
         return (
             JuliaExtractionVariables(
@@ -230,7 +230,7 @@ class JuliaROIEngine:
                 confidence=t_value.confidence,
             )
 
-        resolved["S"] = self._resolve_optional_input(
+        resolved["S"] = self._resolve_qualitative_input(
             symbol="S",
             candidate=variables.S,
             fleet_size=resolved["T"].value if resolved["T"] else None,
@@ -248,13 +248,49 @@ class JuliaROIEngine:
             fleet_size=resolved["T"].value if resolved["T"] else None,
             calibration=calibration,
         )
-        resolved["Du"] = self._resolve_optional_input(
+        resolved["Du"] = self._resolve_qualitative_input(
             symbol="Du",
             candidate=variables.Du,
             fleet_size=resolved["T"].value if resolved["T"] else None,
             calibration=calibration,
         )
         return resolved
+
+    def _resolve_qualitative_input(
+        self,
+        *,
+        symbol: str,
+        candidate,
+        fleet_size: float | None,
+        calibration: JuliaCalibrationModel,
+    ) -> JuliaResolvedInput:
+        if candidate is not None:
+            if candidate.value is not None:
+                return JuliaResolvedInput(
+                    value=float(candidate.value),
+                    source="rep",
+                    confidence=candidate.confidence,
+                )
+            if candidate.qualitative_tag:
+                buckets = (
+                    calibration.qualitative_buckets.S.model_dump()
+                    if symbol == "S"
+                    else calibration.qualitative_buckets.Du.model_dump()
+                )
+                if candidate.qualitative_tag in buckets:
+                    return JuliaResolvedInput(
+                        value=float(buckets[candidate.qualitative_tag]),
+                        source="rep_qualitative",
+                        confidence=candidate.confidence,
+                        qualitative_tag=candidate.qualitative_tag,
+                    )
+
+        return self._resolve_optional_input(
+            symbol=symbol,
+            candidate=None,
+            fleet_size=fleet_size,
+            calibration=calibration,
+        )
 
     def _resolve_optional_input(
         self,
@@ -431,17 +467,27 @@ class JuliaROIEngine:
         markers: list[str] = []
 
         s = _required_input_obj(inputs, "S")
-        if s.source == "default":
-            if "S" in range_rejections:
-                markers.append(range_rejections["S"])
-            else:
+        if "S" in range_rejections:
+            markers.append(range_rejections["S"])
+        if s.source == "rep_qualitative" and s.qualitative_tag:
+            markers.append(
+                f"S inferred from rep phrasing -> '{s.qualitative_tag}' ({s.value:.2f}). "
+                "Override if more precise data is known."
+            )
+        elif s.source == "default":
+            if "S" not in range_rejections:
                 markers.append("S (% spot) defaulted to 50% — rep did not specify.")
 
         du = _required_input_obj(inputs, "Du")
-        if du.source == "default":
-            if "Du" in range_rejections:
-                markers.append(range_rejections["Du"])
-            else:
+        if "Du" in range_rejections:
+            markers.append(range_rejections["Du"])
+        if du.source == "rep_qualitative" and du.qualitative_tag:
+            markers.append(
+                f"Du inferred from rep phrasing -> '{du.qualitative_tag}' ({du.value:.2f}). "
+                "Override if more precise data is known."
+            )
+        elif du.source == "default":
+            if "Du" not in range_rejections:
                 markers.append("Du (% detention uncaptured) defaulted to 50% — rep did not specify.")
 
         p = _required_input_obj(inputs, "P")
