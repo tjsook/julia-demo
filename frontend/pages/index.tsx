@@ -114,6 +114,26 @@ export default function HomePage() {
     setCustomizeOpen(false);
   }
 
+  useEffect(() => {
+    if (!customizeOpen) return;
+
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
+    function handleEscape(event: KeyboardEvent) {
+      if (event.key !== "Escape" || savingPreferences) return;
+      setDraftRouteIds(quickAccessRouteIds);
+      setSaveError(null);
+      setCustomizeOpen(false);
+    }
+
+    window.addEventListener("keydown", handleEscape);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", handleEscape);
+    };
+  }, [customizeOpen, quickAccessRouteIds, savingPreferences]);
+
   function toggleDraftRoute(routeId: DashboardRouteId) {
     setSaveError(null);
 
@@ -224,71 +244,87 @@ export default function HomePage() {
                   </div>
                 )}
               </section>
-
-              {customizeOpen && (
-                <section className={s.quickCustomizePanel}>
-                  <div className={s.quickCustomizeHeader}>
-                    <div>
-                      <h3 className={s.quickCustomizeTitle}>Customize Quick Access</h3>
-                      <p className={s.quickCustomizeSubtitle}>Selected {draftRouteIds.length} of 4 routes.</p>
-                    </div>
-                    <div className={s.quickCustomizeActions}>
-                      <button type="button" className={s.quickCustomizeBtn} onClick={closeCustomize}>
-                        Cancel
-                      </button>
-                      <button
-                        type="button"
-                        className={`${s.quickCustomizeBtn} ${s.quickCustomizeBtnPrimary}`}
-                        onClick={() => void saveQuickAccessPreferences()}
-                        disabled={savingPreferences}
-                      >
-                        {savingPreferences ? <Loader2 size={14} className={s.quickCustomizeSpinner} /> : <Check size={14} />}
-                        {savingPreferences ? "Saving..." : "Save"}
-                      </button>
-                    </div>
-                  </div>
-
-                  {saveError && <div className={s.quickCustomizeError}>{saveError}</div>}
-
-                  <div className={s.quickCustomizeGroups}>
-                    {groupedSelectableRoutes.map(({ group, routes }) => (
-                      <div className={s.quickCustomizeGroup} key={group}>
-                        <p className={s.quickCustomizeGroupTitle}>{group}</p>
-                        <div className={s.quickCustomizeRouteList}>
-                          {routes.map((route) => {
-                            const checked = draftRouteIds.includes(route.id);
-                            const disabled = !checked && draftRouteIds.length >= 4;
-                            const Icon = route.icon;
-                            return (
-                              <label key={route.id} className={s.quickCustomizeRouteOption}>
-                                <input
-                                  type="checkbox"
-                                  checked={checked}
-                                  disabled={disabled || savingPreferences}
-                                  onChange={() => toggleDraftRoute(route.id)}
-                                />
-                                <span className={s.quickCustomizeRouteIcon}>
-                                  <Icon size={15} strokeWidth={1.8} />
-                                </span>
-                                <span className={s.quickCustomizeRouteText}>
-                                  <span>{route.label}</span>
-                                  <span className={s.quickCustomizeRouteMeta}>
-                                    {route.opensInNewTab ? "External" : "Internal"}
-                                  </span>
-                                </span>
-                              </label>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </section>
-              )}
             </div>
           </div>
         </div>
       </div>
+
+      {customizeOpen && (
+        <>
+          <button
+            type="button"
+            className={s.quickCustomizeModalOverlay}
+            aria-label="Close quick access customization"
+            onClick={closeCustomize}
+            disabled={savingPreferences}
+          />
+          <section
+            className={s.quickCustomizeModal}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="quick-customize-title"
+          >
+            <div className={s.quickCustomizePanel}>
+              <div className={s.quickCustomizeHeader}>
+                <div>
+                  <h3 id="quick-customize-title" className={s.quickCustomizeTitle}>Customize Quick Access</h3>
+                  <p className={s.quickCustomizeSubtitle}>Selected {draftRouteIds.length} of 4 routes.</p>
+                </div>
+                <div className={s.quickCustomizeActions}>
+                  <button type="button" className={s.quickCustomizeBtn} onClick={closeCustomize} disabled={savingPreferences}>
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    className={`${s.quickCustomizeBtn} ${s.quickCustomizeBtnPrimary}`}
+                    onClick={() => void saveQuickAccessPreferences()}
+                    disabled={savingPreferences}
+                  >
+                    {savingPreferences ? <Loader2 size={14} className={s.quickCustomizeSpinner} /> : <Check size={14} />}
+                    {savingPreferences ? "Saving..." : "Save"}
+                  </button>
+                </div>
+              </div>
+
+              {saveError && <div className={s.quickCustomizeError}>{saveError}</div>}
+
+              <div className={s.quickCustomizeGroups}>
+                {groupedSelectableRoutes.map(({ group, routes }) => (
+                  <div className={s.quickCustomizeGroup} key={group}>
+                    <p className={s.quickCustomizeGroupTitle}>{group}</p>
+                    <div className={s.quickCustomizeRouteList}>
+                      {routes.map((route) => {
+                        const checked = draftRouteIds.includes(route.id);
+                        const disabled = !checked && draftRouteIds.length >= 4;
+                        const Icon = route.icon;
+                        return (
+                          <label key={route.id} className={s.quickCustomizeRouteOption}>
+                            <input
+                              type="checkbox"
+                              checked={checked}
+                              disabled={disabled || savingPreferences}
+                              onChange={() => toggleDraftRoute(route.id)}
+                            />
+                            <span className={s.quickCustomizeRouteIcon}>
+                              <Icon size={15} strokeWidth={1.8} />
+                            </span>
+                            <span className={s.quickCustomizeRouteText}>
+                              <span>{route.label}</span>
+                              <span className={s.quickCustomizeRouteMeta}>
+                                {route.opensInNewTab ? "External" : "Internal"}
+                              </span>
+                            </span>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </section>
+        </>
+      )}
     </>
   );
 }
