@@ -79,6 +79,7 @@ class JuliaROIEngine:
     def evaluate_roi(
         self,
         *,
+        transcript: str,
         extraction: JuliaROIExtractionResult,
         calibration: JuliaCalibrationModel,
     ) -> JuliaROIEngineResult:
@@ -102,8 +103,17 @@ class JuliaROIEngine:
                 )
             )
 
+        verified_pain_points, evidence_markers = self._verify_pain_point_evidence(
+            transcript=transcript,
+            pain_point_matches=extraction.matched_pain_points,
+            calibration=calibration,
+        )
+        thresholded_pain_points, threshold_markers = self._threshold_filter_pain_points(
+            pain_point_matches=verified_pain_points,
+            calibration=calibration,
+        )
         equations_to_run, matched_pain_points = self._selected_equations(
-            extraction.matched_pain_points,
+            thresholded_pain_points,
             calibration,
         )
         equation_results = [
@@ -128,6 +138,7 @@ class JuliaROIEngine:
             equation_results=equation_results,
             calibration=calibration,
             range_rejections=range_rejections,
+            pain_point_drop_markers=[*evidence_markers, *threshold_markers],
         )
 
         return JuliaROIEngineResult(
@@ -255,6 +266,61 @@ class JuliaROIEngine:
             calibration=calibration,
         )
         return resolved
+
+    def _verify_pain_point_evidence(
+        self,
+        *,
+        transcript: str,
+        pain_point_matches: list[JuliaPainPointMatch],
+        calibration: JuliaCalibrationModel,
+    ) -> tuple[list[JuliaPainPointMatch], list[str]]:
+        config = calibration.evidence_verification
+        if not config.enabled:
+            return pain_point_matches, []
+
+        normalized_transcript = self._normalize_text(transcript, calibration=calibration)
+        min_length = config.min_length_chars
+        surviving: list[JuliaPainPointMatch] = []
+        dropped_markers: list[str] = []
+
+        for match in pain_point_matches:
+            normalized_evidence = self._normalize_text(match.evidence, calibration=calibration)
+            if len(normalized_evidence) < min_length:
+                dropped_markers.append(
+                    f"Dropped '{match.id}' - evidence too short ({len(normalized_evidence)} chars)."
+                )
+                continue
+            if normalized_evidence not in normalized_transcript:
+                dropped_markers.append(
+                    f"Dropped '{match.id}' - LLM-supplied evidence not present in transcript."
+                )
+                continue
+            surviving.append(match)
+
+        return surviving, dropped_markers
+
+    def _threshold_filter_pain_points(
+        self,
+        *,
+        pain_point_matches: list[JuliaPainPointMatch],
+        calibration: JuliaCalibrationModel,
+    ) -> tuple[list[JuliaPainPointMatch], list[str]]:
+        thresholds = {pain.id: pain.threshold for pain in calibration.pain_points}
+        surviving: list[JuliaPainPointMatch] = []
+        dropped_markers: list[str] = []
+
+        for match in pain_point_matches:
+            threshold = thresholds.get(match.id)
+            if threshold is None:
+                continue
+            if match.confidence < threshold:
+                dropped_markers.append(
+                    f"Dropped '{match.id}' - confidence {match.confidence:.2f} below threshold {threshold:.2f}."
+                )
+                continue
+            surviving.append(match)
+
+        return surviving, dropped_markers
 
     def _resolve_qualitative_input(
         self,
@@ -463,8 +529,9 @@ class JuliaROIEngine:
         equation_results: list[JuliaEquationResult],
         calibration: JuliaCalibrationModel,
         range_rejections: dict[str, str],
+        pain_point_drop_markers: list[str],
     ) -> list[str]:
-        markers: list[str] = []
+        markers: list[str] = [*pain_point_drop_markers]
 
         s = _required_input_obj(inputs, "S")
         if "S" in range_rejections:
@@ -526,6 +593,22 @@ class JuliaROIEngine:
                 )
 
         return markers if calibration.honesty_markers_enabled else []
+
+    def _normalize_text(self, text: str, *, calibration: JuliaCalibrationModel) -> str:
+        normalized = text
+        normalize_config = calibration.evidence_verification.normalize
+
+        if normalize_config.lowercase:
+            normalized = normalized.lower()
+
+        if normalize_config.strip_punctuation:
+            punctuation_table = str.maketrans({char: " " for char in ".,!?;:'\"()[]-/\\"})
+            normalized = normalized.translate(punctuation_table)
+
+        if normalize_config.collapse_whitespace:
+            normalized = " ".join(normalized.split())
+
+        return normalized.strip()
 
     def _implied_ratio_markers(
         self,
