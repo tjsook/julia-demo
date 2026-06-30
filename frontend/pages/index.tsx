@@ -160,132 +160,132 @@ export default function HomePage() {
           </header>
 
           <div className={s.content}>
-            <div className={s.pageHeader}>
-              <h1 className={s.pageTitle}>Welcome, {displayName}</h1>
-              <p className={s.pageSubtitle}>
-                Quick links to your most-used GTM dashboard surfaces.
-              </p>
+            <div className={s.homeHero}>
+              <h1 className={s.homeWelcome}>Welcome,</h1>
+              <p className={s.homeName}>{displayName}</p>
             </div>
 
-            <section className={s.quickAccessSection}>
-              <div className={s.quickAccessHeader}>
-                <div>
-                  <h2 className={s.quickAccessTitle}>Quick Access</h2>
-                  <p className={s.quickAccessHint}>Choose up to 4 links for your home page shortcuts.</p>
-                </div>
-                <button
-                  type="button"
-                  className={s.quickAccessCustomizeBtn}
-                  onClick={openCustomize}
-                >
-                  <PencilLine size={14} strokeWidth={1.8} />
-                  Customize
-                </button>
-              </div>
-
-              {loadingPreferences && (
-                <div className={s.stateBox}><div className={s.spinner} />Loading preferences…</div>
-              )}
-
-              {loadError && !loadingPreferences && (
-                <div className={s.stateBox} style={{ color: "var(--accent-red)", height: "auto", padding: "20px 0" }}>
-                  {loadError}
-                </div>
-              )}
-
-              {!loadingPreferences && !loadError && quickAccessRoutes.length === 0 && (
-                <div className={s.quickAccessEmpty}>
-                  No quick access routes selected. Click Customize to pick up to 4 routes.
-                </div>
-              )}
-
-              {!loadingPreferences && !loadError && quickAccessRoutes.length > 0 && (
-                <div className={s.quickAccessGrid}>
-                  {quickAccessRoutes.map((route) => {
-                    const Icon = route.icon;
-                    return (
-                      <Link
-                        key={route.id}
-                        href={route.href}
-                        className={s.quickAccessCard}
-                        target={route.opensInNewTab ? "_blank" : "_self"}
-                        rel={route.opensInNewTab ? "noopener noreferrer" : undefined}
-                      >
-                        <span className={s.quickAccessCardIcon}>
-                          <Icon size={18} strokeWidth={1.8} />
-                        </span>
-                        <span className={s.quickAccessCardLabel}>{route.label}</span>
-                        <span className={s.quickAccessCardMeta}>
-                          {route.group}
-                          {route.opensInNewTab ? " · Opens in new tab" : ""}
-                        </span>
-                      </Link>
-                    );
-                  })}
-                </div>
-              )}
-            </section>
-
-            {customizeOpen && (
-              <section className={s.quickCustomizePanel}>
-                <div className={s.quickCustomizeHeader}>
+            <div className={s.homeLeftColumn}>
+              <section className={`${s.quickAccessSection} ${s.quickAccessWidget}`}>
+                <div className={s.quickAccessHeader}>
                   <div>
-                    <h3 className={s.quickCustomizeTitle}>Customize Quick Access</h3>
-                    <p className={s.quickCustomizeSubtitle}>Selected {draftRouteIds.length} of 4 routes.</p>
+                    <h2 className={s.quickAccessTitle}>Quick Access</h2>
+                    <p className={s.quickAccessHint}>Choose up to 4 links for your home page shortcuts.</p>
                   </div>
-                  <div className={s.quickCustomizeActions}>
-                    <button type="button" className={s.quickCustomizeBtn} onClick={closeCustomize}>
-                      Cancel
-                    </button>
-                    <button
-                      type="button"
-                      className={`${s.quickCustomizeBtn} ${s.quickCustomizeBtnPrimary}`}
-                      onClick={() => void saveQuickAccessPreferences()}
-                      disabled={savingPreferences}
-                    >
-                      {savingPreferences ? <Loader2 size={14} className={s.quickCustomizeSpinner} /> : <Check size={14} />}
-                      {savingPreferences ? "Saving..." : "Save"}
-                    </button>
-                  </div>
+                  <button
+                    type="button"
+                    className={s.quickAccessCustomizeBtn}
+                    onClick={openCustomize}
+                  >
+                    <PencilLine size={14} strokeWidth={1.8} />
+                    Customize
+                  </button>
                 </div>
 
-                {saveError && <div className={s.quickCustomizeError}>{saveError}</div>}
+                {loadingPreferences && (
+                  <div className={s.stateBox}><div className={s.spinner} />Loading preferences…</div>
+                )}
 
-                <div className={s.quickCustomizeGroups}>
-                  {groupedSelectableRoutes.map(({ group, routes }) => (
-                    <div className={s.quickCustomizeGroup} key={group}>
-                      <p className={s.quickCustomizeGroupTitle}>{group}</p>
-                      <div className={s.quickCustomizeRouteList}>
-                        {routes.map((route) => {
-                          const checked = draftRouteIds.includes(route.id);
-                          const disabled = !checked && draftRouteIds.length >= 4;
-                          const Icon = route.icon;
-                          return (
-                            <label key={route.id} className={s.quickCustomizeRouteOption}>
-                              <input
-                                type="checkbox"
-                                checked={checked}
-                                disabled={disabled || savingPreferences}
-                                onChange={() => toggleDraftRoute(route.id)}
-                              />
-                              <span className={s.quickCustomizeRouteIcon}>
-                                <Icon size={15} strokeWidth={1.8} />
-                              </span>
-                              <span className={s.quickCustomizeRouteText}>
-                                <span>{route.label}</span>
-                                <span className={s.quickCustomizeRouteMeta}>
-                                  {route.opensInNewTab ? "External" : "Internal"}
-                                </span>
-                              </span>
-                            </label>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  ))}
-                </div>
+                {loadError && !loadingPreferences && (
+                  <div className={s.stateBox} style={{ color: "var(--accent-red)", height: "auto", padding: "20px 0" }}>
+                    {loadError}
+                  </div>
+                )}
+
+                {!loadingPreferences && !loadError && quickAccessRoutes.length === 0 && (
+                  <div className={s.quickAccessEmpty}>
+                    No quick access routes selected. Click Customize to pick up to 4 routes.
+                  </div>
+                )}
+
+                {!loadingPreferences && !loadError && quickAccessRoutes.length > 0 && (
+                  <div className={s.quickAccessGrid}>
+                    {quickAccessRoutes.map((route) => {
+                      const Icon = route.icon;
+                      return (
+                        <Link
+                          key={route.id}
+                          href={route.href}
+                          className={s.quickAccessCard}
+                          target={route.opensInNewTab ? "_blank" : "_self"}
+                          rel={route.opensInNewTab ? "noopener noreferrer" : undefined}
+                        >
+                          <span className={s.quickAccessCardIcon}>
+                            <Icon size={18} strokeWidth={1.8} />
+                          </span>
+                          <span className={s.quickAccessCardLabel}>{route.label}</span>
+                          <span className={s.quickAccessCardMeta}>
+                            {route.group}
+                            {route.opensInNewTab ? " · Opens in new tab" : ""}
+                          </span>
+                        </Link>
+                      );
+                    })}
+                  </div>
+                )}
               </section>
-            )}
+
+              {customizeOpen && (
+                <section className={s.quickCustomizePanel}>
+                  <div className={s.quickCustomizeHeader}>
+                    <div>
+                      <h3 className={s.quickCustomizeTitle}>Customize Quick Access</h3>
+                      <p className={s.quickCustomizeSubtitle}>Selected {draftRouteIds.length} of 4 routes.</p>
+                    </div>
+                    <div className={s.quickCustomizeActions}>
+                      <button type="button" className={s.quickCustomizeBtn} onClick={closeCustomize}>
+                        Cancel
+                      </button>
+                      <button
+                        type="button"
+                        className={`${s.quickCustomizeBtn} ${s.quickCustomizeBtnPrimary}`}
+                        onClick={() => void saveQuickAccessPreferences()}
+                        disabled={savingPreferences}
+                      >
+                        {savingPreferences ? <Loader2 size={14} className={s.quickCustomizeSpinner} /> : <Check size={14} />}
+                        {savingPreferences ? "Saving..." : "Save"}
+                      </button>
+                    </div>
+                  </div>
+
+                  {saveError && <div className={s.quickCustomizeError}>{saveError}</div>}
+
+                  <div className={s.quickCustomizeGroups}>
+                    {groupedSelectableRoutes.map(({ group, routes }) => (
+                      <div className={s.quickCustomizeGroup} key={group}>
+                        <p className={s.quickCustomizeGroupTitle}>{group}</p>
+                        <div className={s.quickCustomizeRouteList}>
+                          {routes.map((route) => {
+                            const checked = draftRouteIds.includes(route.id);
+                            const disabled = !checked && draftRouteIds.length >= 4;
+                            const Icon = route.icon;
+                            return (
+                              <label key={route.id} className={s.quickCustomizeRouteOption}>
+                                <input
+                                  type="checkbox"
+                                  checked={checked}
+                                  disabled={disabled || savingPreferences}
+                                  onChange={() => toggleDraftRoute(route.id)}
+                                />
+                                <span className={s.quickCustomizeRouteIcon}>
+                                  <Icon size={15} strokeWidth={1.8} />
+                                </span>
+                                <span className={s.quickCustomizeRouteText}>
+                                  <span>{route.label}</span>
+                                  <span className={s.quickCustomizeRouteMeta}>
+                                    {route.opensInNewTab ? "External" : "Internal"}
+                                  </span>
+                                </span>
+                              </label>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </section>
+              )}
+            </div>
           </div>
         </div>
       </div>
