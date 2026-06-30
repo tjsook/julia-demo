@@ -16,6 +16,20 @@ const BASE_URL =
   process.env.NEXT_PUBLIC_API_URL?.replace(/\/$/, "") ?? "http://localhost:8000";
 const JULIA_CACHE_PREFIX = "/julia/";
 
+export class JuliaApiError extends Error {
+  code: string;
+  detail: string;
+  status: number;
+
+  constructor(code: string, detail: string, status: number) {
+    super(detail);
+    this.name = "JuliaApiError";
+    this.code = code;
+    this.detail = detail;
+    this.status = status;
+  }
+}
+
 async function dashboardAuthHeaders(): Promise<HeadersInit> {
   const session = await getSession();
   if (session?.authError) {
@@ -30,14 +44,18 @@ async function dashboardAuthHeaders(): Promise<HeadersInit> {
 async function parseJuliaJson<T>(res: Response, fallback: string): Promise<T> {
   if (res.ok) return res.json() as Promise<T>;
 
-  let message = fallback;
   try {
     const body: unknown = await res.json();
-    if (isJuliaError(body)) message = body.detail;
-  } catch {
-    throw new Error(message);
+    if (isJuliaError(body)) {
+      throw new JuliaApiError(body.error, body.detail, res.status);
+    }
+  } catch (err) {
+    if (err instanceof JuliaApiError) {
+      throw err;
+    }
+    throw new Error(fallback);
   }
-  throw new Error(message);
+  throw new Error(fallback);
 }
 
 function isJuliaError(body: unknown): body is { error: string; detail: string } {
