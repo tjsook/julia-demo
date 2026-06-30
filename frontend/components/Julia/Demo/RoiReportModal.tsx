@@ -1,7 +1,12 @@
 import { X } from "lucide-react";
 import { useEffect } from "react";
 
-import type { JuliaROIAnalysisPayload, JuliaROIInputSource } from "../../../lib/julia/types";
+import {
+  SUB_SHARE_PARENT,
+  type JuliaROIAnalysisPayload,
+  type JuliaROIInputSource,
+  type JuliaROIPainPointMatch,
+} from "../../../lib/julia/types";
 import s from "../../../styles/julia.module.css";
 import { RoiHonestyMarkers } from "./RoiHonestyMarkers";
 
@@ -35,6 +40,7 @@ export function RoiReportModal({ payload, onClose }: RoiReportModalProps) {
   if (!payload) return null;
 
   const title = payload.company_name ? `${payload.company_name} — ROI Analysis` : "ROI Analysis";
+  const painRows = buildPainPointRows(payload.matched_pain_points);
 
   return (
     <section className={s.roiModal} aria-label={title}>
@@ -52,14 +58,17 @@ export function RoiReportModal({ payload, onClose }: RoiReportModalProps) {
         <div className={s.roiBody}>
           <section className={s.roiSection}>
             <h2>Pain points detected</h2>
-            {payload.matched_pain_points.length === 0 ? (
+            {painRows.length === 0 ? (
               <p className={s.roiEmptyState}>I caught the inputs but no clear pain points were mentioned.</p>
             ) : (
               <ul className={s.roiPainList}>
-                {payload.matched_pain_points.map((point) => (
-                  <li key={`${point.id}-${point.evidence}`}>
-                    <span className={s.roiPainLabel}>{painPointLabel(point.id)}</span>
-                    <span className={s.roiPainConfidence}>{Math.round(point.confidence * 100)}%</span>
+                {painRows.map((row) => (
+                  <li key={row.key}>
+                    <span className={row.isSubShare ? s.roiPainSubLabel : s.roiPainLabel}>
+                      {row.isSubShare ? "↳ " : ""}
+                      {painPointLabel(row.id)}
+                    </span>
+                    <span className={s.roiPainConfidence}>{Math.round(row.confidence * 100)}%</span>
                   </li>
                 ))}
               </ul>
@@ -98,16 +107,8 @@ export function RoiReportModal({ payload, onClose }: RoiReportModalProps) {
             )}
             <div className={s.roiSummary}>
               <div>
-                <span>Gross annual value</span>
-                <span>{formatCurrency(payload.summary.gross_annual_value)}</span>
-              </div>
-              <div>
-                <span>Net annual value</span>
-                <span>{formatCurrency(payload.summary.net_annual_value)}</span>
-              </div>
-              <div className={s.roiSummaryMultiple}>
-                <span>ROI multiple</span>
-                <span>{payload.summary.roi_multiple.toFixed(1)}x</span>
+                <span>Annual value</span>
+                <span>{formatCurrency(payload.summary.annual_value)}</span>
               </div>
             </div>
           </section>
@@ -136,20 +137,75 @@ function formatInputValue(value: number, mode: "count" | "percent"): string {
 
 function describeSource(source: JuliaROIInputSource): string {
   if (source === "rep") return "from rep";
+  if (source === "rep_qualitative") return "from rep phrasing";
   if (source === "derived") return "derived from T";
   return "default";
 }
 
 function painPointLabel(id: string): string {
   const labels: Record<string, string> = {
-    spot_freight_winrate: "Spot freight win-rate",
+    manual_load_matching: "Manual load matching",
     detention_not_billed: "Detention not getting billed",
     office_labor_high: "Office labor too high",
-    voice_phone_overload: "Voice / phone work overload",
-    order_entry_rekeying: "Order entry / re-keying",
-    invoicing_billing_slow: "Invoicing / billing slow",
-    fuel_cost_cards: "Fuel cost / fuel cards",
-    asset_utilization_revenue: "Asset utilization / revenue per truck",
+    phone_work_overload: "Phone work overload",
+    manual_order_entry: "Manual order entry",
+    invoicing_billing_slow: "Invoicing/billing slow",
+    high_fuel_cost: "High fuel cost",
+    low_revenue_per_truck: "Low revenue per truck",
   };
   return labels[id] ?? id;
+}
+
+function buildPainPointRows(points: JuliaROIPainPointMatch[]): Array<{
+  key: string;
+  id: string;
+  confidence: number;
+  isSubShare: boolean;
+}> {
+  const topLevel: JuliaROIPainPointMatch[] = [];
+  const childrenByParent = new Map<string, JuliaROIPainPointMatch[]>();
+
+  for (const point of points) {
+    const parentId = SUB_SHARE_PARENT[point.id];
+    if (!parentId) {
+      topLevel.push(point);
+      continue;
+    }
+    const existing = childrenByParent.get(parentId) ?? [];
+    existing.push(point);
+    childrenByParent.set(parentId, existing);
+  }
+
+  const rows: Array<{ key: string; id: string; confidence: number; isSubShare: boolean }> = [];
+  for (const point of topLevel) {
+    rows.push({
+      key: `${point.id}-${point.evidence}`,
+      id: point.id,
+      confidence: point.confidence,
+      isSubShare: false,
+    });
+    const subShares = childrenByParent.get(point.id) ?? [];
+    for (const subShare of subShares) {
+      rows.push({
+        key: `${subShare.id}-${subShare.evidence}`,
+        id: subShare.id,
+        confidence: subShare.confidence,
+        isSubShare: true,
+      });
+    }
+    childrenByParent.delete(point.id);
+  }
+
+  for (const orphanSubShares of childrenByParent.values()) {
+    for (const subShare of orphanSubShares) {
+      rows.push({
+        key: `${subShare.id}-${subShare.evidence}`,
+        id: subShare.id,
+        confidence: subShare.confidence,
+        isSubShare: false,
+      });
+    }
+  }
+
+  return rows;
 }

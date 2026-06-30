@@ -48,7 +48,7 @@ export interface JuliaVoiceMatch {
 }
 
 export type JuliaROIInputSymbol = "T" | "S" | "P" | "Ld" | "Du";
-export type JuliaROIInputSource = "rep" | "derived" | "default";
+export type JuliaROIInputSource = "rep" | "rep_qualitative" | "derived" | "default";
 export type JuliaROIEquationId = "E1" | "E2" | "E3" | "E3a" | "E3b" | "E3c" | "E4" | "E5";
 
 export interface JuliaROIPainPointMatch {
@@ -83,11 +83,14 @@ export interface JuliaROIEquationResult {
 }
 
 export interface JuliaROISummary {
-  gross_annual_value: number;
-  hemut_cost_per_year: number;
-  net_annual_value: number;
-  roi_multiple: number;
+  annual_value: number;
 }
+
+export const SUB_SHARE_PARENT: Record<string, string> = {
+  phone_work_overload: "office_labor_high",
+  manual_order_entry: "office_labor_high",
+  invoicing_billing_slow: "office_labor_high",
+};
 
 export interface JuliaROIAnalysisPayload {
   company_name?: string | null;
