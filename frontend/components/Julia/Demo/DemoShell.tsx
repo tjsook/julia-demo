@@ -1,10 +1,12 @@
 import type { JuliaDemoState } from "../../../hooks/julia/useJuliaDemo";
-import type { JuliaVoiceMatch } from "../../../lib/julia/types";
+import type { JuliaROIAnalysisPayload, JuliaVoiceMatch } from "../../../lib/julia/types";
 import s from "../../../styles/julia.module.css";
 import { DocumentModal } from "./DocumentModal";
 import { DocumentSelector } from "./DocumentSelector";
 import { ErrorToast } from "./ErrorToast";
 import { JuliaOrb } from "./JuliaOrb";
+import { RoiPendingInputToast } from "./RoiPendingInputToast";
+import { RoiReportModal } from "./RoiReportModal";
 
 type DemoShellProps = {
   state: JuliaDemoState;
@@ -14,10 +16,13 @@ type DemoShellProps = {
   documentUrl: string | null;
   documentLoading: boolean;
   documentError: string | null;
+  roiPayload: JuliaROIAnalysisPayload | null;
+  roiPendingDetail: string | null;
   onOrbClick: () => void;
   onSelectMatch: (match: JuliaVoiceMatch) => void;
   onCloseForeground: () => void;
   onDismissError: () => void;
+  onDismissRoiPending: () => void;
 };
 
 const statusLabel: Record<JuliaDemoState, string> = {
@@ -26,6 +31,8 @@ const statusLabel: Record<JuliaDemoState, string> = {
   processing: "Processing",
   "showing-document": "Document",
   "showing-selector": "Select document",
+  "showing-roi-report": "ROI report",
+  "roi-pending-input": "Need fleet size",
 };
 
 export function DemoShell({
@@ -36,10 +43,13 @@ export function DemoShell({
   documentUrl,
   documentLoading,
   documentError,
+  roiPayload,
+  roiPendingDetail,
   onOrbClick,
   onSelectMatch,
   onCloseForeground,
   onDismissError,
+  onDismissRoiPending,
 }: DemoShellProps) {
   return (
     <main className={s.demoMain}>
@@ -66,7 +76,12 @@ export function DemoShell({
         />
       )}
 
+      {state === "showing-roi-report" && (
+        <RoiReportModal payload={roiPayload} onClose={onCloseForeground} />
+      )}
+
       <ErrorToast message={errorToast} onDismiss={onDismissError} />
+      <RoiPendingInputToast detail={roiPendingDetail} onDismiss={onDismissRoiPending} />
     </main>
   );
 }

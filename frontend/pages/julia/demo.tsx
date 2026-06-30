@@ -19,10 +19,13 @@ export default function JuliaDemoPage() {
         documentUrl={demo.documentUrl}
         documentLoading={demo.documentLoading}
         documentError={demo.documentError}
+        roiPayload={demo.roiPayload}
+        roiPendingDetail={demo.roiPendingDetail}
         onOrbClick={demo.handleOrbClick}
         onSelectMatch={(match) => void demo.openDocument(match)}
         onCloseForeground={demo.closeForeground}
         onDismissError={demo.dismissError}
+        onDismissRoiPending={demo.dismissRoiPending}
       />
     </>
   );

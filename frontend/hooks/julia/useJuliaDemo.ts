@@ -1,8 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { fetchJuliaSignedUrl, postJuliaVoiceDocumentConfirmation } from "../../lib/julia/api";
-import { isSilentVoiceIntent, logSilentVoiceIntent } from "../../lib/julia/intent";
+import {
+  isRoiPendingInputIntent,
+  isSilentVoiceIntent,
+  logSilentVoiceIntent,
+} from "../../lib/julia/intent";
 import type {
+  JuliaROIAnalysisPayload,
   JuliaVoiceIntentResponse,
   JuliaVoiceMatch,
   JuliaVoicePlaybackResponse,
@@ -14,7 +19,9 @@ export type JuliaDemoState =
   | "listening"
   | "processing"
   | "showing-document"
-  | "showing-selector";
+  | "showing-selector"
+  | "showing-roi-report"
+  | "roi-pending-input";
 
 type JuliaTtsPlayback = {
   audioBase64: string;
@@ -37,6 +44,8 @@ export function useJuliaDemo() {
   const [documentUrl, setDocumentUrl] = useState<string | null>(null);
   const [documentLoading, setDocumentLoading] = useState(false);
   const [documentError, setDocumentError] = useState<string | null>(null);
+  const [roiPayload, setRoiPayload] = useState<JuliaROIAnalysisPayload | null>(null);
+  const [roiPendingDetail, setRoiPendingDetail] = useState<string | null>(null);
   const confirmationRequestRef = useRef(0);
 
   const queueSelectedDocumentConfirmation = useCallback(async (match: JuliaVoiceMatch) => {
@@ -63,6 +72,8 @@ export function useJuliaDemo() {
     if (!options.preservePlayback) setTtsPlayback(null);
     setDocumentUrl(null);
     setDocumentError(null);
+    setRoiPayload(null);
+    setRoiPendingDetail(null);
     setDocumentLoading(true);
     setState("showing-document");
     if (playConfirmation) void queueSelectedDocumentConfirmation(match);
@@ -83,11 +94,33 @@ export function useJuliaDemo() {
     setSelectorMatches([]);
     setDocumentUrl(null);
     setDocumentError(null);
+    setRoiPayload(null);
+    setRoiPendingDetail(null);
 
     if (isSilentVoiceIntent(response)) {
       logSilentVoiceIntent(response);
       setTtsPlayback(null);
       setState("idle");
+      return;
+    }
+
+    if (response.intent === "roi_analysis") {
+      if (!response.roi_payload) {
+        throw new Error("ROI analysis response is missing roi_payload.");
+      }
+      setTtsPlayback(playbackFromResponse(response, ["showing-roi-report"]));
+      setRoiPayload(response.roi_payload);
+      setState("showing-roi-report");
+      return;
+    }
+
+    if (isRoiPendingInputIntent(response)) {
+      if (!response.roi_pending?.detail) {
+        throw new Error("ROI pending-input response is missing roi_pending.detail.");
+      }
+      setTtsPlayback(playbackFromResponse(response, ["roi-pending-input"]));
+      setRoiPendingDetail(response.roi_pending.detail);
+      setState("roi-pending-input");
       return;
     }
 
@@ -119,6 +152,8 @@ export function useJuliaDemo() {
 
   const handleError = useCallback((message: string) => {
     setErrorToast(message || "Something went wrong.");
+    setRoiPayload(null);
+    setRoiPendingDetail(null);
     setState("idle");
   }, []);
 
@@ -128,7 +163,8 @@ export function useJuliaDemo() {
   });
 
   const handleOrbClick = useCallback(() => {
-    if (state === "idle") {
+    if (state === "idle" || state === "roi-pending-input") {
+      setRoiPendingDetail(null);
       setState("listening");
       void voice.startListening();
       return;
@@ -154,6 +190,8 @@ export function useJuliaDemo() {
     setDocumentUrl(null);
     setDocumentError(null);
     setDocumentLoading(false);
+    setRoiPayload(null);
+    setRoiPendingDetail(null);
   }, []);
 
   useEffect(() => {
@@ -197,11 +235,14 @@ export function useJuliaDemo() {
     documentUrl,
     documentLoading,
     documentError,
+    roiPayload,
+    roiPendingDetail,
     handleOrbClick,
     openDocument,
     cancelListening,
     closeForeground,
     dismissError: () => setErrorToast(null),
+    dismissRoiPending: () => setRoiPendingDetail(null),
   };
 }
 
