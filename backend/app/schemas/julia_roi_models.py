@@ -187,14 +187,46 @@ class JuliaExtractedValue(BaseModel):
     confidence: float = Field(ge=0.0, le=1.0)
 
 
+SQualitativeTag = Literal[
+    "strongly_contracted",
+    "mostly_contracted",
+    "balanced",
+    "mostly_spot",
+    "strongly_spot",
+]
+DuQualitativeTag = Literal[
+    "fully_billed",
+    "mostly_collected",
+    "partial",
+    "mostly_uncaptured",
+    "barely_collected",
+]
+
+
+class JuliaExtractedSValue(BaseModel):
+    """One model-extracted S candidate via numeric value or qualitative tag."""
+
+    value: float | None = Field(default=None, ge=0.0, le=1.0)
+    qualitative_tag: SQualitativeTag | None = None
+    confidence: float = Field(ge=0.0, le=1.0)
+
+
+class JuliaExtractedDuValue(BaseModel):
+    """One model-extracted Du candidate via numeric value or qualitative tag."""
+
+    value: float | None = Field(default=None, ge=0.0, le=1.0)
+    qualitative_tag: DuQualitativeTag | None = None
+    confidence: float = Field(ge=0.0, le=1.0)
+
+
 class JuliaExtractionVariables(BaseModel):
     """Numerical variables extracted from one transcript."""
 
     T: JuliaExtractedValue | None = None
-    S: JuliaExtractedValue | None = None
+    S: JuliaExtractedSValue | None = None
     P: JuliaExtractedValue | None = None
     Ld: JuliaExtractedValue | None = None
-    Du: JuliaExtractedValue | None = None
+    Du: JuliaExtractedDuValue | None = None
 
 
 class JuliaPainPointMatch(BaseModel):
