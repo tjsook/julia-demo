@@ -13,6 +13,7 @@ Run locally:
     uvicorn app.main:app --reload --port 8000
 """
 
+import json
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -55,7 +56,21 @@ logger = get_logger("diesel_dashboard_backend")
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
-    logger.info("Starting %s (env=%s)", settings.APP_NAME, settings.APP_ENV)
+    runtime_settings = get_settings()
+    logger.info("Starting %s (env=%s)", runtime_settings.APP_NAME, runtime_settings.APP_ENV)
+    logger.info(
+        json.dumps(
+            {
+                "event": "julia.config",
+                "JULIA_VOICE_AUDIO_MAX_MB": runtime_settings.JULIA_VOICE_AUDIO_MAX_MB,
+                "OPENAI_EXTRACTION_MODEL": runtime_settings.OPENAI_EXTRACTION_MODEL,
+                "OPENAI_STT_MODEL": runtime_settings.OPENAI_STT_MODEL,
+                "OPENAI_TTS_MODEL": runtime_settings.OPENAI_TTS_MODEL,
+                "OPENAI_TTS_VOICE": runtime_settings.OPENAI_TTS_VOICE,
+            },
+            separators=(",", ":"),
+        )
+    )
     yield
     logger.info("Shutting down — closing external clients")
     await close_eds_client()

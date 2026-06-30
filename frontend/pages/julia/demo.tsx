@@ -1,6 +1,7 @@
 import Head from "next/head";
 
 import { DemoShell } from "../../components/Julia/Demo/DemoShell";
+import { JuliaDebugPanel } from "../../components/Julia/Demo/JuliaDebugPanel";
 import { useJuliaDemo } from "../../hooks/julia/useJuliaDemo";
 
 export default function JuliaDemoPage() {
@@ -26,6 +27,13 @@ export default function JuliaDemoPage() {
         onCloseForeground={demo.closeForeground}
         onDismissError={demo.dismissError}
         onDismissRoiPending={demo.dismissRoiPending}
+      />
+      <JuliaDebugPanel
+        transcript={demo.debugTranscript}
+        stopReason={demo.debugStopReason}
+        audioSizeMb={demo.debugAudioSizeMb}
+        durationSeconds={demo.debugDurationSeconds}
+        recording={demo.debugRecording}
       />
     </>
   );

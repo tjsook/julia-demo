@@ -12,7 +12,7 @@ import type {
   JuliaVoiceMatch,
   JuliaVoicePlaybackResponse,
 } from "../../lib/julia/types";
-import { useJuliaVoice } from "./useJuliaVoice";
+import { useJuliaVoice, type JuliaVoiceDebugSnapshot } from "./useJuliaVoice";
 
 export type JuliaDemoState =
   | "idle"
@@ -161,6 +161,7 @@ export function useJuliaDemo() {
     onIntent: handleIntent,
     onError: handleError,
   });
+  const debugSnapshot: JuliaVoiceDebugSnapshot = voice.debugSnapshot;
 
   const handleOrbClick = useCallback(() => {
     if (state === "idle" || state === "roi-pending-input") {
@@ -237,6 +238,11 @@ export function useJuliaDemo() {
     documentError,
     roiPayload,
     roiPendingDetail,
+    debugTranscript: debugSnapshot.transcript,
+    debugStopReason: debugSnapshot.stopReason,
+    debugAudioSizeMb: debugSnapshot.audioSizeMb,
+    debugDurationSeconds: debugSnapshot.durationSeconds,
+    debugRecording: debugSnapshot.recording,
     handleOrbClick,
     openDocument,
     cancelListening,
