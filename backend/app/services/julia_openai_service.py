@@ -171,10 +171,10 @@ class JuliaOpenAIService:
                         "Ld": _numeric_var_schema(),
                         "Du": _numeric_var_schema(),
                     },
-                    "required": [],
+                    "required": ["T", "S", "P", "Ld", "Du"],
                 },
             },
-            "required": ["pain_points", "variables"],
+            "required": ["company_name", "pain_points", "variables"],
         }
 
         messages = [
