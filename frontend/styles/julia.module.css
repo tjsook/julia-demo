@@ -838,6 +838,13 @@
   font-weight: 720;
 }
 
+.roiPainSubLabel {
+  color: rgba(255, 255, 255, 0.8);
+  font-size: 13px;
+  font-weight: 690;
+  padding-left: 10px;
+}
+
 .roiPainConfidence {
   color: rgba(255, 255, 255, 0.62);
   font-size: 12px;

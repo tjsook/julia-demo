@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import json
+import logging
+import re
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Literal
 
 import httpx
 
@@ -24,6 +26,14 @@ _TRANSCRIPTION_URL = f"{_OPENAI_BASE_URL}/audio/transcriptions"
 _SPEECH_URL = f"{_OPENAI_BASE_URL}/audio/speech"
 _CHAT_COMPLETIONS_URL = f"{_OPENAI_BASE_URL}/chat/completions"
 _TTS_MIME_TYPE = "audio/mpeg"
+_WHISPER_PROMPT = (
+    "Hemut is a trucking technology company. "
+    "The rep is a Hemut salesperson speaking about a trucking prospect."
+)
+
+logger = logging.getLogger(__name__)
+
+IntentFallbackLabel = Literal["doc_retrieval", "roi_analysis", "non_doc"]
 
 
 @dataclass(frozen=True)
@@ -45,6 +55,7 @@ class JuliaOpenAIService:
         tts_model: str | None = None,
         tts_voice: str | None = None,
         extraction_model: str | None = None,
+        intent_model: str | None = None,
         http_client: Any | None = None,
     ) -> None:
         settings = get_settings()
@@ -58,6 +69,7 @@ class JuliaOpenAIService:
         self._tts_model = tts_model or settings.OPENAI_TTS_MODEL
         self._tts_voice = tts_voice or settings.OPENAI_TTS_VOICE
         self._extraction_model = extraction_model or settings.OPENAI_EXTRACTION_MODEL
+        self._intent_model = intent_model or settings.OPENAI_INTENT_MODEL
         self._client = http_client or httpx.Client(timeout=30)
 
     def transcribe_audio(
@@ -76,7 +88,7 @@ class JuliaOpenAIService:
                 content_type or "application/octet-stream",
             )
         }
-        data = {"model": self._stt_model}
+        data = {"model": self._stt_model, "prompt": _WHISPER_PROMPT}
         try:
             response = self._client.post(
                 _TRANSCRIPTION_URL,
@@ -101,6 +113,109 @@ class JuliaOpenAIService:
                 "OpenAI transcription response did not include text.",
             )
         return transcript.strip()
+
+    def normalize_brand_variants(
+        self,
+        *,
+        transcript: str,
+        calibration: JuliaCalibrationModel,
+    ) -> str:
+        """Normalize known Hemut transcription variants in transcript text."""
+        variants = calibration.brand_normalization.variants
+        if not variants:
+            return transcript
+
+        pattern = r"\b(" + "|".join(re.escape(variant) for variant in variants) + r")\b"
+        return re.sub(
+            pattern,
+            calibration.brand_normalization.target,
+            transcript,
+            flags=re.IGNORECASE,
+        )
+
+    def classify_intent_llm(self, *, transcript: str) -> IntentFallbackLabel:
+        """Classify ambiguous utterances into doc_retrieval, roi_analysis, or non_doc."""
+        headers = {
+            "Authorization": f"Bearer {self._api_key}",
+            "Content-Type": "application/json",
+        }
+        messages = [
+            {
+                "role": "system",
+                "content": (
+                    "You classify a single rep utterance into one of three intents:\n"
+                    "- doc_retrieval: the rep is asking to display a specific sales document\n"
+                    "- roi_analysis: the rep is summarizing a prospect's situation for an ROI calculation\n"
+                    "- non_doc: anything else (greetings, side talk, unclear)\n\n"
+                    'Output strict JSON: {"intent":"<one of the three values>"}. '
+                    "Never explain. Never add other fields."
+                ),
+            },
+            {
+                "role": "user",
+                "content": f'Utterance: "{transcript}"',
+            },
+        ]
+        schema = {
+            "type": "object",
+            "additionalProperties": False,
+            "properties": {
+                "intent": {
+                    "type": "string",
+                    "enum": ["doc_retrieval", "roi_analysis", "non_doc"],
+                }
+            },
+            "required": ["intent"],
+        }
+        payload = {
+            "model": self._intent_model,
+            "messages": messages,
+            "response_format": {
+                "type": "json_schema",
+                "json_schema": {
+                    "name": "julia_intent_fallback",
+                    "strict": True,
+                    "schema": schema,
+                },
+            },
+            "temperature": 0,
+            "max_tokens": 50,
+        }
+
+        try:
+            response = self._client.post(
+                _CHAT_COMPLETIONS_URL,
+                headers=headers,
+                json=payload,
+                timeout=3,
+            )
+            if response.status_code >= 400:
+                raise JuliaOpenAIError(
+                    "intent_fallback_failed",
+                    f"OpenAI intent fallback failed with status {response.status_code}.",
+                )
+            body = response.json()
+            choices = body.get("choices") if isinstance(body, dict) else None
+            message = choices[0].get("message") if isinstance(choices, list) and choices else None
+            content = message.get("content") if isinstance(message, dict) else None
+            if not isinstance(content, str) or not content.strip():
+                raise ValueError("Missing structured intent content.")
+            raw_json = json.loads(content)
+            intent = raw_json.get("intent") if isinstance(raw_json, dict) else None
+            if intent not in {"doc_retrieval", "roi_analysis", "non_doc"}:
+                raise ValueError(f"Unsupported intent fallback value: {intent!r}.")
+            return intent
+        except Exception as exc:
+            logger.warning(
+                json.dumps(
+                    {
+                        "event": "julia.intent_fallback_failed",
+                        "detail": str(exc),
+                    },
+                    separators=(",", ":"),
+                )
+            )
+            return "non_doc"
 
     def synthesize_speech(self, *, text: str) -> tuple[bytes, str]:
         """Create a short spoken confirmation clip."""

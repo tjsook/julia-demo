@@ -121,16 +121,10 @@ class JuliaROIEngine:
             for equation_id in equations_to_run
         ]
 
-        gross_annual_value = sum(result.result for result in equation_results)
-        hemut_cost_per_year = inputs["T"].value * calibration.constants["Pr"].value * 12
-        net_annual_value = gross_annual_value
-        roi_multiple = 0.0 if hemut_cost_per_year == 0 else gross_annual_value / hemut_cost_per_year
+        annual_value = sum(result.result for result in equation_results)
 
         summary = JuliaROISummary(
-            gross_annual_value=round(gross_annual_value, 2),
-            hemut_cost_per_year=round(hemut_cost_per_year, 2),
-            net_annual_value=round(net_annual_value, 2),
-            roi_multiple=round(roi_multiple, 2),
+            annual_value=round(annual_value, 2),
         )
 
         honesty_markers = self._honesty_markers(
@@ -579,13 +573,13 @@ class JuliaROIEngine:
 
         markers.extend(self._implied_ratio_markers(inputs=inputs, calibration=calibration))
 
-        used_constants: set[str] = {"Pr"}
+        used_constants: set[str] = set()
         for equation in equation_results:
             used_constants.update(_EQUATION_DEFS[equation.id].constants)
 
         placeholders = [symbol for symbol in used_constants if not calibration.constants[symbol].calibrated]
         if placeholders:
-            ordered = [symbol for symbol in ("D", "R", "Up", "Di", "Hb", "Dr", "Lc", "Oa", "G", "Fg", "Pr") if symbol in placeholders]
+            ordered = [symbol for symbol in ("D", "R", "Up", "Di", "Hb", "Dr", "Lc", "Oa", "G", "Fg") if symbol in placeholders]
             if len(ordered) == 1:
                 markers.append(
                     f"Constant {ordered[0]} is a placeholder value pending calibration with real fleet data."

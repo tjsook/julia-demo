@@ -71,12 +71,18 @@ def score_documents(
 
     return sorted(matches, key=lambda match: match.score, reverse=True)
 
-
-def select_matches(transcript: str, documents: list[JuliaMatchDocument]) -> JuliaMatchResult:
+def select_matches(
+    transcript: str,
+    documents: list[JuliaMatchDocument],
+    *,
+    require_trigger: bool = True,
+) -> JuliaMatchResult:
     """Classify retrieval intent and select matching documents."""
-    utterance_tokens, has_trigger = strip_trigger(tokenize(transcript))
-    if not has_trigger:
-        return JuliaMatchResult(intent="non_doc", matches=[], top_score=0)
+    utterance_tokens = tokenize(transcript)
+    if require_trigger:
+        utterance_tokens, has_trigger = strip_trigger(utterance_tokens)
+        if not has_trigger:
+            return JuliaMatchResult(intent="non_doc", matches=[], top_score=0)
 
     candidates = score_documents(utterance_tokens, documents)
     if not candidates:
