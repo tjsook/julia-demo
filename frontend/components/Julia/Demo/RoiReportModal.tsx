@@ -102,10 +102,6 @@ export function RoiReportModal({ payload, onClose }: RoiReportModalProps) {
                 <span>{formatCurrency(payload.summary.gross_annual_value)}</span>
               </div>
               <div>
-                <span>Less Hemut cost</span>
-                <span>({formatCurrency(payload.summary.hemut_cost_per_year)})</span>
-              </div>
-              <div>
                 <span>Net annual value</span>
                 <span>{formatCurrency(payload.summary.net_annual_value)}</span>
               </div>

@@ -72,7 +72,7 @@
   "derivation_rules": {
     "S": {
       "kind": "flat",
-      "value": 0.5,
+      "value": 0.1,
       "source": "industry midpoint"
     },
     "P": {
@@ -85,7 +85,7 @@
     },
     "Ld": {
       "kind": "linear",
-      "multiplier": 1.3,
+      "multiplier": 0.55,
       "source": "MD example anchor"
     },
     "Du": {

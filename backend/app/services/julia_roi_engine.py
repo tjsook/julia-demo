@@ -123,7 +123,7 @@ class JuliaROIEngine:
 
         gross_annual_value = sum(result.result for result in equation_results)
         hemut_cost_per_year = inputs["T"].value * calibration.constants["Pr"].value * 12
-        net_annual_value = gross_annual_value - hemut_cost_per_year
+        net_annual_value = gross_annual_value
         roi_multiple = 0.0 if hemut_cost_per_year == 0 else gross_annual_value / hemut_cost_per_year
 
         summary = JuliaROISummary(
@@ -543,7 +543,7 @@ class JuliaROIEngine:
             )
         elif s.source == "default":
             if "S" not in range_rejections:
-                markers.append("S (% spot) defaulted to 50% — rep did not specify.")
+                markers.append("S (% spot) defaulted to 10% — rep did not specify.")
 
         du = _required_input_obj(inputs, "Du")
         if "Du" in range_rejections:
@@ -570,8 +570,11 @@ class JuliaROIEngine:
             if "Ld" in range_rejections:
                 markers.append(range_rejections["Ld"])
             else:
+                ld_multiplier = calibration.derivation_rules["Ld"].multiplier
+                if ld_multiplier is None:
+                    raise ValueError('Derivation rule for "Ld" is missing required "multiplier".')
                 markers.append(
-                    f"Ld (loads/day) derived from T ({_required_input(inputs, 'T'):g} × 1.3 = {ld.value:g})."
+                    f"Ld (loads/day) derived from T ({_required_input(inputs, 'T'):g} × {ld_multiplier:g} = {ld.value:g})."
                 )
 
         markers.extend(self._implied_ratio_markers(inputs=inputs, calibration=calibration))
