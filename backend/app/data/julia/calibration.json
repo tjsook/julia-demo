@@ -96,16 +96,30 @@
   },
   "pain_points": [
     {
-      "id": "spot_freight_winrate",
-      "label": "Spot freight win-rate",
+      "id": "manual_load_matching",
+      "label": "Manual load matching",
       "threshold": 0.75,
       "equation_id": "E1",
       "trigger_phrases": [
+        "manually matching drivers to loads",
+        "manual matching",
+        "match by hand",
+        "we assign loads by hand",
+        "manual dispatching",
+        "no matching algorithm",
+        "not using matching",
+        "trial and error matching",
+        "spreadsheet matching",
+        "dispatchers pick which truck",
         "losing tenders",
         "brokers outbid us",
         "slow on quotes",
+        "slow to respond to brokers",
+        "quoting takes forever",
         "spot freight",
-        "win rate"
+        "win rate",
+        "tenders we lose",
+        "bid response time"
       ]
     },
     {
@@ -117,7 +131,17 @@
         "drivers waiting at docks",
         "not billing detention",
         "stuck collecting",
-        "dock wait"
+        "dock wait",
+        "customers stiff us on detention",
+        "hard to collect detention",
+        "we don't enforce detention",
+        "drivers stuck at shipper",
+        "sitting for hours",
+        "lose money to detention",
+        "wait time billing",
+        "stuck at the customer",
+        "free detention",
+        "detention pay"
       ]
     },
     {
@@ -128,62 +152,130 @@
       "trigger_phrases": [
         "too many people in the office",
         "office staff is huge",
-        "need to free dispatchers"
+        "need to free dispatchers",
+        "office is overstaffed",
+        "office headcount is high",
+        "hiring back-office help",
+        "need to scale without hiring",
+        "office overhead",
+        "lots of admin people",
+        "back-office is bloated",
+        "we have x dispatchers",
+        "need to reduce headcount"
       ]
     },
     {
-      "id": "voice_phone_overload",
-      "label": "Voice / phone work overload",
+      "id": "phone_work_overload",
+      "label": "Phone work overload",
       "threshold": 0.75,
       "equation_id": "E3a",
       "trigger_phrases": [
         "answering calls all day",
         "after-hours coverage",
-        "phone work"
+        "phone work",
+        "on the phone constantly",
+        "dispatchers stuck on calls",
+        "check calls",
+        "calling drivers all day",
+        "tracking calls",
+        "phone tag",
+        "status calls",
+        "customer calling for updates",
+        "driver check-ins",
+        "eta calls",
+        "call volume is crazy",
+        "always on the phone"
       ]
     },
     {
-      "id": "order_entry_rekeying",
-      "label": "Order entry / re-keying",
+      "id": "manual_order_entry",
+      "label": "Manual order entry",
       "threshold": 0.75,
       "equation_id": "E3b",
       "trigger_phrases": [
         "manual data entry",
         "typing in loads",
-        "re-keying ratecons"
+        "re-keying ratecons",
+        "manually entering orders",
+        "copy-pasting from emails",
+        "building loads by hand",
+        "rate confirmations come as pdfs",
+        "transcribing rate cons",
+        "data entry from emails",
+        "manual order setup",
+        "ratecon entry",
+        "order creation is manual",
+        "building orders in the tms"
       ]
     },
     {
       "id": "invoicing_billing_slow",
-      "label": "Invoicing / billing slow",
+      "label": "Invoicing/billing slow",
       "threshold": 0.75,
       "equation_id": "E3c",
       "trigger_phrases": [
         "slow to invoice",
         "AR aging",
-        "DSO is bad"
+        "DSO is bad",
+        "days sales outstanding",
+        "invoicing takes forever",
+        "slow to bill",
+        "billing delays",
+        "late invoices",
+        "cash flow issues from billing",
+        "backlog of invoices",
+        "manual billing",
+        "bookkeeper bottleneck",
+        "receivables piling up",
+        "customers paying late",
+        "pending invoices"
       ]
     },
     {
-      "id": "fuel_cost_cards",
-      "label": "Fuel cost / fuel cards",
+      "id": "high_fuel_cost",
+      "label": "High fuel cost",
       "threshold": 0.7,
       "equation_id": "E4",
       "trigger_phrases": [
         "fuel is killing us",
         "overpaying for diesel",
-        "fuel cards"
+        "fuel cards",
+        "fuel costs are crazy",
+        "diesel prices",
+        "fuel surcharge",
+        "looking for fuel savings",
+        "want a better fuel program",
+        "efs card",
+        "comdata",
+        "pilot fuel",
+        "cents per gallon",
+        "per-gallon discount",
+        "fleet card",
+        "fuel discount program",
+        "fuel program"
       ]
     },
     {
-      "id": "asset_utilization_revenue",
-      "label": "Asset utilization / revenue per truck",
+      "id": "low_revenue_per_truck",
+      "label": "Low revenue per truck",
       "threshold": 0.85,
       "equation_id": "E5",
       "trigger_phrases": [
         "want more out of each truck",
         "underutilized trucks",
-        "margin pressure"
+        "margin pressure",
+        "revenue per truck",
+        "squeeze more from the fleet",
+        "idle trucks",
+        "empty miles",
+        "deadhead",
+        "loaded miles",
+        "trucks sitting",
+        "capacity utilization",
+        "productivity per truck",
+        "income per asset",
+        "asset utilization",
+        "more loaded miles"
       ]
     }
   ],
@@ -220,9 +312,28 @@
       "run the numbers",
       "give me an analysis"
     ],
-    "doc_terminal_triggers": [
+    "doc_word_triggers": [
+      "doc",
+      "docs",
       "document",
-      "doc"
+      "documentation"
+    ]
+  },
+  "brand_normalization": {
+    "target": "Hemut",
+    "variants": [
+      "hemit",
+      "hemot",
+      "hemuth",
+      "hemmet",
+      "hemmit",
+      "hemmot",
+      "hammet",
+      "hammit",
+      "hemmut",
+      "hemmoth",
+      "hammot",
+      "hammoth"
     ]
   },
   "extraction": {

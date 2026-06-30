@@ -75,6 +75,7 @@ class Settings(BaseSettings):
     OPENAI_TTS_MODEL: str = "gpt-4o-mini-tts"
     OPENAI_TTS_VOICE: str = "marin"
     OPENAI_EXTRACTION_MODEL: str = "gpt-4o-mini"
+    OPENAI_INTENT_MODEL: str = "gpt-4o-mini"
     JULIA_VOICE_AUDIO_MAX_MB: int = Field(default=25, ge=1)
 
     # Phase 2.6 Event Detection

@@ -74,7 +74,14 @@ class JuliaIntentClassifierConfig(BaseModel):
     metric_count_threshold: int = Field(ge=1)
     metric_vocabulary: list[str]
     roi_verb_patterns: list[str]
-    doc_terminal_triggers: list[str]
+    doc_word_triggers: list[str]
+
+
+class JuliaBrandNormalizationConfig(BaseModel):
+    """Brand spelling normalization rules applied after STT transcription."""
+
+    target: str = Field(min_length=1)
+    variants: list[str] = Field(default_factory=list)
 
 
 class JuliaExtractionConfig(BaseModel):
@@ -160,6 +167,7 @@ class JuliaCalibrationModel(BaseModel):
     derivation_rules: dict[InputSymbol, JuliaDerivationRule]
     pain_points: list[JuliaPainPointConfig]
     intent_classifier: JuliaIntentClassifierConfig
+    brand_normalization: JuliaBrandNormalizationConfig
     extraction: JuliaExtractionConfig
     qualitative_buckets: JuliaQualitativeBucketsConfig
     evidence_verification: JuliaEvidenceVerificationConfig
@@ -278,10 +286,7 @@ class JuliaEquationResult(BaseModel):
 class JuliaROISummary(BaseModel):
     """Headline totals from evaluated ROI equations."""
 
-    gross_annual_value: float
-    hemut_cost_per_year: float
-    net_annual_value: float
-    roi_multiple: float
+    annual_value: float
 
 
 class JuliaROIAnalysisPayload(BaseModel):

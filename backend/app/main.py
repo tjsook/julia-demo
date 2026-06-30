@@ -64,6 +64,7 @@ async def lifespan(_: FastAPI):
                 "event": "julia.config",
                 "JULIA_VOICE_AUDIO_MAX_MB": runtime_settings.JULIA_VOICE_AUDIO_MAX_MB,
                 "OPENAI_EXTRACTION_MODEL": runtime_settings.OPENAI_EXTRACTION_MODEL,
+                "OPENAI_INTENT_MODEL": runtime_settings.OPENAI_INTENT_MODEL,
                 "OPENAI_STT_MODEL": runtime_settings.OPENAI_STT_MODEL,
                 "OPENAI_TTS_MODEL": runtime_settings.OPENAI_TTS_MODEL,
                 "OPENAI_TTS_VOICE": runtime_settings.OPENAI_TTS_VOICE,
