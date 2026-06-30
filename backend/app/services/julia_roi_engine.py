@@ -9,6 +9,7 @@ from app.schemas.julia_roi_models import (
     EquationId,
     JuliaCalibrationModel,
     JuliaEquationResult,
+    JuliaExtractedValue,
     JuliaExtractionVariables,
     JuliaPainPointMatch,
     JuliaResolvedInput,
@@ -82,7 +83,9 @@ class JuliaROIEngine:
         extraction: JuliaROIExtractionResult,
         calibration: JuliaCalibrationModel,
     ) -> JuliaROIEngineResult:
-        if extraction.variables.T is None:
+        sanitized_variables, range_rejections = self._sanitize_extracted_variables(extraction.variables)
+
+        if sanitized_variables.T is None:
             return JuliaROIEngineResult(
                 pending=JuliaROIPendingInput(
                     missing=["fleet_size"],
@@ -90,7 +93,7 @@ class JuliaROIEngine:
                 )
             )
 
-        inputs = self._resolve_inputs(extraction.variables, calibration)
+        inputs = self._resolve_inputs(sanitized_variables, calibration)
         fleet_size = inputs.get("T")
         if fleet_size is None:
             return JuliaROIEngineResult(
@@ -125,6 +128,7 @@ class JuliaROIEngine:
             inputs=inputs,
             equation_results=equation_results,
             calibration=calibration,
+            range_rejections=range_rejections,
         )
 
         return JuliaROIEngineResult(
@@ -136,6 +140,44 @@ class JuliaROIEngine:
                 summary=summary,
                 honesty_markers=honesty_markers,
             )
+        )
+
+    def _sanitize_extracted_variables(
+        self,
+        variables: JuliaExtractionVariables,
+    ) -> tuple[JuliaExtractionVariables, set[str]]:
+        range_rejections: set[str] = set()
+
+        t_value = _validated_positive_integer(variables.T)
+        if variables.T is not None and t_value is None:
+            range_rejections.add("T")
+
+        s_value = _validated_fraction(variables.S)
+        if variables.S is not None and s_value is None:
+            range_rejections.add("S")
+
+        p_value = _validated_positive_integer(variables.P)
+        if variables.P is not None and p_value is None:
+            range_rejections.add("P")
+
+        ld_max = t_value.value * 10 if t_value is not None else None
+        ld_value = _validated_positive_number(variables.Ld, max_value=ld_max)
+        if variables.Ld is not None and ld_value is None:
+            range_rejections.add("Ld")
+
+        du_value = _validated_fraction(variables.Du)
+        if variables.Du is not None and du_value is None:
+            range_rejections.add("Du")
+
+        return (
+            JuliaExtractionVariables(
+                T=t_value,
+                S=s_value,
+                P=p_value,
+                Ld=ld_value,
+                Du=du_value,
+            ),
+            range_rejections,
         )
 
     def _resolve_inputs(
@@ -355,25 +397,44 @@ class JuliaROIEngine:
         inputs: dict[str, JuliaResolvedInput | None],
         equation_results: list[JuliaEquationResult],
         calibration: JuliaCalibrationModel,
+        range_rejections: set[str],
     ) -> list[str]:
         markers: list[str] = []
 
         s = _required_input_obj(inputs, "S")
         if s.source == "default":
-            markers.append("S (% spot) defaulted to 50% — rep did not specify.")
+            if "S" in range_rejections:
+                markers.append("LLM returned out-of-range value for S; defaulted to 50%.")
+            else:
+                markers.append("S (% spot) defaulted to 50% — rep did not specify.")
 
         du = _required_input_obj(inputs, "Du")
         if du.source == "default":
-            markers.append("Du (% detention uncaptured) defaulted to 50% — rep did not specify.")
+            if "Du" in range_rejections:
+                markers.append("LLM returned out-of-range value for Du; defaulted to 50%.")
+            else:
+                markers.append("Du (% detention uncaptured) defaulted to 50% — rep did not specify.")
 
         p = _required_input_obj(inputs, "P")
         if p.source == "derived":
             trucks = _required_input(inputs, "T")
-            markers.append(f"P (office people) derived from T (ceil({trucks:g}/7) = {p.value:g}).")
+            if "P" in range_rejections:
+                markers.append(
+                    f"LLM returned out-of-range value for P; derived from T (ceil({trucks:g}/7) = {p.value:g})."
+                )
+            else:
+                markers.append(f"P (office people) derived from T (ceil({trucks:g}/7) = {p.value:g}).")
 
         ld = _required_input_obj(inputs, "Ld")
         if ld.source == "derived":
-            markers.append(f"Ld (loads/day) derived from T ({_required_input(inputs, 'T'):g} × 1.3 = {ld.value:g}).")
+            if "Ld" in range_rejections:
+                markers.append(
+                    f"LLM returned out-of-range value for Ld; derived from T ({_required_input(inputs, 'T'):g} × 1.3 = {ld.value:g})."
+                )
+            else:
+                markers.append(
+                    f"Ld (loads/day) derived from T ({_required_input(inputs, 'T'):g} × 1.3 = {ld.value:g})."
+                )
 
         used_constants: set[str] = {"Pr"}
         for equation in equation_results:
@@ -404,3 +465,36 @@ def _required_input_obj(inputs: dict[str, JuliaResolvedInput | None], symbol: st
     if entry is None:
         raise ValueError(f'Missing required input "{symbol}" during ROI evaluation.')
     return entry
+
+
+def _validated_positive_integer(value: JuliaExtractedValue | None) -> JuliaExtractedValue | None:
+    if value is None:
+        return None
+    candidate = value.value
+    if candidate < 1 or not float(candidate).is_integer():
+        return None
+    return value
+
+
+def _validated_fraction(value: JuliaExtractedValue | None) -> JuliaExtractedValue | None:
+    if value is None:
+        return None
+    candidate = float(value.value)
+    if candidate < 0 or candidate > 1:
+        return None
+    return value
+
+
+def _validated_positive_number(
+    value: JuliaExtractedValue | None,
+    *,
+    max_value: float | None = None,
+) -> JuliaExtractedValue | None:
+    if value is None:
+        return None
+    candidate = float(value.value)
+    if candidate <= 0:
+        return None
+    if max_value is not None and candidate > max_value:
+        return None
+    return value

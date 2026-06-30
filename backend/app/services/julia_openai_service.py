@@ -165,11 +165,11 @@ class JuliaOpenAIService:
                     "type": "object",
                     "additionalProperties": False,
                     "properties": {
-                        "T": _numeric_var_schema(),
-                        "S": _numeric_var_schema(),
-                        "P": _numeric_var_schema(),
-                        "Ld": _numeric_var_schema(),
-                        "Du": _numeric_var_schema(),
+                        "T": _positive_number_var_schema(max_value=10000),
+                        "S": _fraction_var_schema(),
+                        "P": _positive_number_var_schema(max_value=5000),
+                        "Ld": _positive_number_var_schema(max_value=10000),
+                        "Du": _fraction_var_schema(),
                     },
                     "required": ["T", "S", "P", "Ld", "Du"],
                 },
@@ -197,11 +197,18 @@ class JuliaOpenAIService:
                         for pain in pain_points
                     )
                     + "\n\nNumeric extraction rules:\n"
-                    "- Extract numbers only if explicitly stated.\n"
-                    "- '100 trucks' -> T=100.\n"
-                    "- 'Half detention' -> Du=0.5.\n"
-                    "- Percent values should be decimal fractions (e.g. 70% => 0.70).\n"
-                    "- Return confidence [0,1] for each value and each pain point."
+                    "- Extract numbers ONLY if explicitly stated by the rep.\n"
+                    "- If a variable is not mentioned with a specific number, return null.\n"
+                    "- DO NOT guess from nearby qualitative language.\n"
+                    "- Return confidence [0,1] for each value and each pain point.\n"
+                    "Per-variable extraction examples:\n"
+                    "- '100 trucks' -> T=100\n"
+                    "- '60 percent spot' -> S=0.60\n"
+                    "- 'mostly spot freight' -> S=null\n"
+                    "- '8 office people' or '8 in the office' -> P=8\n"
+                    "- '150 loads a day' -> Ld=150\n"
+                    "- '70 percent of detention' or '70 percent uncaptured' -> Du=0.70\n"
+                    "- 'lots of detention' -> Du=null"
                 ),
             },
         ]
@@ -273,12 +280,24 @@ class JuliaOpenAIService:
         )
 
 
-def _numeric_var_schema() -> dict[str, Any]:
+def _fraction_var_schema() -> dict[str, Any]:
     return {
         "type": ["object", "null"],
         "additionalProperties": False,
         "properties": {
-            "value": {"type": "number"},
+            "value": {"type": "number", "minimum": 0, "maximum": 1},
+            "confidence": {"type": "number", "minimum": 0, "maximum": 1},
+        },
+        "required": ["value", "confidence"],
+    }
+
+
+def _positive_number_var_schema(*, max_value: float) -> dict[str, Any]:
+    return {
+        "type": ["object", "null"],
+        "additionalProperties": False,
+        "properties": {
+            "value": {"type": "number", "exclusiveMinimum": 0, "maximum": max_value},
             "confidence": {"type": "number", "minimum": 0, "maximum": 1},
         },
         "required": ["value", "confidence"],
