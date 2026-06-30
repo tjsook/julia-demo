@@ -9,7 +9,6 @@ from app.schemas.julia_roi_models import (
     EquationId,
     JuliaCalibrationModel,
     JuliaEquationResult,
-    JuliaExtractedValue,
     JuliaExtractionVariables,
     JuliaPainPointMatch,
     JuliaResolvedInput,
@@ -145,29 +144,59 @@ class JuliaROIEngine:
     def _sanitize_extracted_variables(
         self,
         variables: JuliaExtractionVariables,
-    ) -> tuple[JuliaExtractionVariables, set[str]]:
-        range_rejections: set[str] = set()
+    ) -> tuple[JuliaExtractionVariables, dict[str, str]]:
+        range_rejections: dict[str, str] = {}
 
-        t_value = _validated_positive_integer(variables.T)
-        if variables.T is not None and t_value is None:
-            range_rejections.add("T")
+        t_value = variables.T
+        if t_value is not None and (t_value.value < 1 or not float(t_value.value).is_integer()):
+            range_rejections["T"] = (
+                f"T extracted as {_format_number(t_value.value)} but must be an integer >= 1."
+            )
+            t_value = None
 
-        s_value = _validated_fraction(variables.S)
-        if variables.S is not None and s_value is None:
-            range_rejections.add("S")
+        s_value = variables.S
+        if s_value is not None and (s_value.value < 0 or s_value.value > 1):
+            range_rejections["S"] = (
+                f"S extracted as {_format_number(s_value.value)} but must be between 0 and 1. "
+                "Treated as not provided; defaulted to 50%."
+            )
+            s_value = None
 
-        p_value = _validated_positive_integer(variables.P)
-        if variables.P is not None and p_value is None:
-            range_rejections.add("P")
+        p_value = variables.P
+        if p_value is not None and (
+            p_value.value < 1 or p_value.value > 10000 or not float(p_value.value).is_integer()
+        ):
+            range_rejections["P"] = (
+                f"P extracted as {_format_number(p_value.value)} but must be an integer between 1 and 10,000. "
+                "Treated as not provided; derived from T."
+            )
+            p_value = None
 
-        ld_max = t_value.value * 10 if t_value is not None else None
-        ld_value = _validated_positive_number(variables.Ld, max_value=ld_max)
-        if variables.Ld is not None and ld_value is None:
-            range_rejections.add("Ld")
+        ld_value = variables.Ld
+        if ld_value is not None:
+            if ld_value.value <= 0:
+                range_rejections["Ld"] = (
+                    f"Ld extracted as {_format_number(ld_value.value)} but must be greater than 0. "
+                    "Treated as not provided; derived from T."
+                )
+                ld_value = None
+            elif t_value is not None:
+                ld_ceiling = t_value.value * 5
+                if ld_value.value > ld_ceiling:
+                    range_rejections["Ld"] = (
+                        f"Ld extracted as {_format_number(ld_value.value)} but exceeds sanity ceiling of T × 5 "
+                        f"({_format_number(ld_ceiling)} for {_format_number(t_value.value)} trucks). "
+                        "Treated as not provided; derived from T."
+                    )
+                    ld_value = None
 
-        du_value = _validated_fraction(variables.Du)
-        if variables.Du is not None and du_value is None:
-            range_rejections.add("Du")
+        du_value = variables.Du
+        if du_value is not None and (du_value.value < 0 or du_value.value > 1):
+            range_rejections["Du"] = (
+                f"Du extracted as {_format_number(du_value.value)} but must be between 0 and 1. "
+                "Treated as not provided; defaulted to 50%."
+            )
+            du_value = None
 
         return (
             JuliaExtractionVariables(
@@ -397,44 +426,42 @@ class JuliaROIEngine:
         inputs: dict[str, JuliaResolvedInput | None],
         equation_results: list[JuliaEquationResult],
         calibration: JuliaCalibrationModel,
-        range_rejections: set[str],
+        range_rejections: dict[str, str],
     ) -> list[str]:
         markers: list[str] = []
 
         s = _required_input_obj(inputs, "S")
         if s.source == "default":
             if "S" in range_rejections:
-                markers.append("LLM returned out-of-range value for S; defaulted to 50%.")
+                markers.append(range_rejections["S"])
             else:
                 markers.append("S (% spot) defaulted to 50% — rep did not specify.")
 
         du = _required_input_obj(inputs, "Du")
         if du.source == "default":
             if "Du" in range_rejections:
-                markers.append("LLM returned out-of-range value for Du; defaulted to 50%.")
+                markers.append(range_rejections["Du"])
             else:
                 markers.append("Du (% detention uncaptured) defaulted to 50% — rep did not specify.")
 
         p = _required_input_obj(inputs, "P")
         if p.source == "derived":
-            trucks = _required_input(inputs, "T")
             if "P" in range_rejections:
-                markers.append(
-                    f"LLM returned out-of-range value for P; derived from T (ceil({trucks:g}/7) = {p.value:g})."
-                )
+                markers.append(range_rejections["P"])
             else:
+                trucks = _required_input(inputs, "T")
                 markers.append(f"P (office people) derived from T (ceil({trucks:g}/7) = {p.value:g}).")
 
         ld = _required_input_obj(inputs, "Ld")
         if ld.source == "derived":
             if "Ld" in range_rejections:
-                markers.append(
-                    f"LLM returned out-of-range value for Ld; derived from T ({_required_input(inputs, 'T'):g} × 1.3 = {ld.value:g})."
-                )
+                markers.append(range_rejections["Ld"])
             else:
                 markers.append(
                     f"Ld (loads/day) derived from T ({_required_input(inputs, 'T'):g} × 1.3 = {ld.value:g})."
                 )
+
+        markers.extend(self._implied_ratio_markers(inputs=inputs, calibration=calibration))
 
         used_constants: set[str] = {"Pr"}
         for equation in equation_results:
@@ -454,6 +481,40 @@ class JuliaROIEngine:
 
         return markers if calibration.honesty_markers_enabled else []
 
+    def _implied_ratio_markers(
+        self,
+        *,
+        inputs: dict[str, JuliaResolvedInput | None],
+        calibration: JuliaCalibrationModel,
+    ) -> list[str]:
+        trucks = _required_input(inputs, "T")
+        loads_per_day = _required_input(inputs, "Ld")
+        operating_days = calibration.constants["D"].value
+        revenue_per_load = calibration.constants["R"].value
+
+        implied_loads_per_truck_per_year = loads_per_day * operating_days / trucks
+        implied_revenue_per_truck_per_year = loads_per_day * operating_days * revenue_per_load / trucks
+
+        markers: list[str] = []
+
+        loads_band = calibration.sanity_bands.loads_per_truck_per_year
+        if implied_loads_per_truck_per_year > loads_band.soft_ceiling:
+            markers.append(
+                f"Implied activity: {round(implied_loads_per_truck_per_year):,} loads/truck/year. "
+                f"Industry typical is {round(loads_band.industry_low):,}–{round(loads_band.industry_high):,}. "
+                "Confirm fleet activity with prospect before presenting."
+            )
+
+        revenue_band = calibration.sanity_bands.revenue_per_truck_per_year_usd
+        if implied_revenue_per_truck_per_year > revenue_band.soft_ceiling:
+            markers.append(
+                f"Implied revenue: ${round(implied_revenue_per_truck_per_year):,}/truck/year. "
+                f"Industry typical is ${revenue_band.industry_low / 1000:.0f}K–${revenue_band.industry_high / 1000:.0f}K. "
+                "Confirm with prospect."
+            )
+
+        return markers
+
 
 def _required_input(inputs: dict[str, JuliaResolvedInput | None], symbol: str) -> float:
     entry = _required_input_obj(inputs, symbol)
@@ -467,34 +528,7 @@ def _required_input_obj(inputs: dict[str, JuliaResolvedInput | None], symbol: st
     return entry
 
 
-def _validated_positive_integer(value: JuliaExtractedValue | None) -> JuliaExtractedValue | None:
-    if value is None:
-        return None
-    candidate = value.value
-    if candidate < 1 or not float(candidate).is_integer():
-        return None
-    return value
-
-
-def _validated_fraction(value: JuliaExtractedValue | None) -> JuliaExtractedValue | None:
-    if value is None:
-        return None
-    candidate = float(value.value)
-    if candidate < 0 or candidate > 1:
-        return None
-    return value
-
-
-def _validated_positive_number(
-    value: JuliaExtractedValue | None,
-    *,
-    max_value: float | None = None,
-) -> JuliaExtractedValue | None:
-    if value is None:
-        return None
-    candidate = float(value.value)
-    if candidate <= 0:
-        return None
-    if max_value is not None and candidate > max_value:
-        return None
-    return value
+def _format_number(value: float) -> str:
+    if float(value).is_integer():
+        return f"{int(value):,}"
+    return f"{value:,.2f}"

@@ -83,6 +83,29 @@ class JuliaExtractionConfig(BaseModel):
     numeric_confidence_threshold: float = Field(ge=0.0, le=1.0)
 
 
+class JuliaSanityBand(BaseModel):
+    """A soft warning band used for implied-ratio honesty markers."""
+
+    industry_low: float = Field(gt=0)
+    industry_high: float = Field(gt=0)
+    soft_ceiling: float = Field(gt=0)
+
+    @model_validator(mode="after")
+    def _validate_band_order(self) -> JuliaSanityBand:
+        if not (self.industry_low < self.industry_high <= self.soft_ceiling):
+            raise ValueError(
+                "Sanity band values must satisfy industry_low < industry_high <= soft_ceiling."
+            )
+        return self
+
+
+class JuliaSanityBandsConfig(BaseModel):
+    """Calibration-backed implied-ratio warning thresholds."""
+
+    loads_per_truck_per_year: JuliaSanityBand
+    revenue_per_truck_per_year_usd: JuliaSanityBand
+
+
 class JuliaCalibrationModel(BaseModel):
     """Top-level calibration payload loaded from JSON."""
 
@@ -95,6 +118,7 @@ class JuliaCalibrationModel(BaseModel):
     pain_points: list[JuliaPainPointConfig]
     intent_classifier: JuliaIntentClassifierConfig
     extraction: JuliaExtractionConfig
+    sanity_bands: JuliaSanityBandsConfig
 
     @model_validator(mode="after")
     def _validate_required_symbols(self) -> JuliaCalibrationModel:

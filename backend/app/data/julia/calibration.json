@@ -227,5 +227,17 @@
   },
   "extraction": {
     "numeric_confidence_threshold": 0.8
+  },
+  "sanity_bands": {
+    "loads_per_truck_per_year": {
+      "industry_low": 100,
+      "industry_high": 250,
+      "soft_ceiling": 300
+    },
+    "revenue_per_truck_per_year_usd": {
+      "industry_low": 150000,
+      "industry_high": 350000,
+      "soft_ceiling": 400000
+    }
   }
 }

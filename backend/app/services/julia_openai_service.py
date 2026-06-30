@@ -183,7 +183,12 @@ class JuliaOpenAIService:
                 "content": (
                     "You extract sales call ROI details into strict JSON. "
                     "Only output schema-valid JSON. Never infer unstated numbers. "
-                    "Use lexical math for obvious spoken numerals and fractions like 'about a hundred' or 'half'."
+                    "Use lexical math for obvious spoken numerals and fractions like 'about a hundred' or 'half'.\n"
+                    "Strict rules:\n"
+                    "- Return null for any variable not explicitly stated as a specific number or percentage.\n"
+                    "- Never invent numbers from related sentences.\n"
+                    "- S and Du are decimal fractions in the range [0, 1]. Values outside [0,1] are invalid.\n"
+                    "- Cap reported confidence at 0.95. Never use 1.0."
                 ),
             },
             {
@@ -199,16 +204,27 @@ class JuliaOpenAIService:
                     + "\n\nNumeric extraction rules:\n"
                     "- Extract numbers ONLY if explicitly stated by the rep.\n"
                     "- If a variable is not mentioned with a specific number, return null.\n"
-                    "- DO NOT guess from nearby qualitative language.\n"
+                    "- DO NOT guess from related numbers in nearby sentences.\n"
                     "- Return confidence [0,1] for each value and each pain point.\n"
                     "Per-variable extraction examples:\n"
-                    "- '100 trucks' -> T=100\n"
-                    "- '60 percent spot' -> S=0.60\n"
-                    "- 'mostly spot freight' -> S=null\n"
-                    "- '8 office people' or '8 in the office' -> P=8\n"
-                    "- '150 loads a day' -> Ld=150\n"
-                    "- '70 percent of detention' or '70 percent uncaptured' -> Du=0.70\n"
-                    "- 'lots of detention' -> Du=null"
+                    "T (trucks):\n"
+                    "- '100 trucks' -> T = {'value': 100, 'confidence': 0.95}\n"
+                    "- 'around 100 trucks' -> T = {'value': 100, 'confidence': 0.85}\n"
+                    "- 'a lot of trucks' -> T = null\n"
+                    "S (% spot, MUST be decimal fraction 0-1):\n"
+                    "- '60 percent spot' -> S = {'value': 0.60, 'confidence': 0.95}\n"
+                    "- 'half spot half contracted' -> S = {'value': 0.50, 'confidence': 0.85}\n"
+                    "- 'mostly spot freight' -> S = null\n"
+                    "P (office people):\n"
+                    "- '8 in the office' or '8 office people' -> P = {'value': 8, 'confidence': 0.95}\n"
+                    "- 'a small team' -> P = null\n"
+                    "Ld (loads per day):\n"
+                    "- '150 loads a day' -> Ld = {'value': 150, 'confidence': 0.95}\n"
+                    "- 'they run about 150 loads daily' -> Ld = {'value': 150, 'confidence': 0.90}\n"
+                    "- 'lots of loads' -> Ld = null\n"
+                    "Du (% detention uncaptured, MUST be decimal fraction 0-1):\n"
+                    "- '70 percent of detention' or '70 percent uncaptured' -> Du = {'value': 0.70, 'confidence': 0.95}\n"
+                    "- 'most detention is not billed' -> Du = null"
                 ),
             },
         ]
@@ -257,10 +273,14 @@ class JuliaOpenAIService:
                 f"OpenAI extraction response parsing failed: {exc}",
             ) from exc
 
+        clamped_pain_points = [
+            pain.model_copy(update={"confidence": _clamp_confidence(pain.confidence)})
+            for pain in structured.pain_points
+        ]
         thresholds = {pain.id: pain.threshold for pain in pain_points}
         matched = [
             pain
-            for pain in structured.pain_points
+            for pain in clamped_pain_points
             if pain.id in thresholds and pain.confidence >= thresholds[pain.id]
         ]
 
@@ -307,6 +327,11 @@ def _positive_number_var_schema(*, max_value: float) -> dict[str, Any]:
 def _accept_numeric(candidate: JuliaExtractedValue | None, threshold: float) -> JuliaExtractedValue | None:
     if candidate is None:
         return None
-    if candidate.confidence < threshold:
+    clamped = candidate.model_copy(update={"confidence": _clamp_confidence(candidate.confidence)})
+    if clamped.confidence < threshold:
         return None
-    return candidate
+    return clamped
+
+
+def _clamp_confidence(confidence: float) -> float:
+    return min(float(confidence), 0.95)
