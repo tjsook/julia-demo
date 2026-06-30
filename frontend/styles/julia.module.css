@@ -476,6 +476,65 @@
   text-transform: uppercase;
 }
 
+.juliaDebugPanel {
+  position: fixed;
+  left: 16px;
+  bottom: 16px;
+  width: min(360px, calc(100vw - 32px));
+  z-index: 3;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  border-radius: 8px;
+  background: rgba(5, 7, 11, 0.88);
+  color: rgba(255, 255, 255, 0.9);
+  font-family: "SFMono-Regular", Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  font-size: 11px;
+  line-height: 1.4;
+  padding: 10px 12px;
+}
+
+.juliaDebugHeader {
+  margin-bottom: 6px;
+  color: rgba(255, 255, 255, 0.62);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.juliaDebugRecording {
+  color: #f5c518;
+  font-weight: 700;
+}
+
+.juliaDebugRow {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.juliaDebugTranscript {
+  margin-top: 8px;
+}
+
+.juliaDebugTranscriptLabel {
+  margin-bottom: 3px;
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.juliaDebugTranscript pre {
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.juliaDebugTranscriptError {
+  color: #fca5a5;
+}
+
 .documentModal,
 .selectorOverlay {
   position: absolute;
