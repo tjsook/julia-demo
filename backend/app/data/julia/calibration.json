@@ -98,7 +98,7 @@
     {
       "id": "spot_freight_winrate",
       "label": "Spot freight win-rate",
-      "threshold": 0.65,
+      "threshold": 0.75,
       "equation_id": "E1",
       "trigger_phrases": [
         "losing tenders",
@@ -111,7 +111,7 @@
     {
       "id": "detention_not_billed",
       "label": "Detention not getting billed",
-      "threshold": 0.6,
+      "threshold": 0.7,
       "equation_id": "E2",
       "trigger_phrases": [
         "drivers waiting at docks",
@@ -123,7 +123,7 @@
     {
       "id": "office_labor_high",
       "label": "Office labor too high",
-      "threshold": 0.75,
+      "threshold": 0.85,
       "equation_id": "E3",
       "trigger_phrases": [
         "too many people in the office",
@@ -134,7 +134,7 @@
     {
       "id": "voice_phone_overload",
       "label": "Voice / phone work overload",
-      "threshold": 0.65,
+      "threshold": 0.75,
       "equation_id": "E3a",
       "trigger_phrases": [
         "answering calls all day",
@@ -145,7 +145,7 @@
     {
       "id": "order_entry_rekeying",
       "label": "Order entry / re-keying",
-      "threshold": 0.65,
+      "threshold": 0.75,
       "equation_id": "E3b",
       "trigger_phrases": [
         "manual data entry",
@@ -156,7 +156,7 @@
     {
       "id": "invoicing_billing_slow",
       "label": "Invoicing / billing slow",
-      "threshold": 0.65,
+      "threshold": 0.75,
       "equation_id": "E3c",
       "trigger_phrases": [
         "slow to invoice",
@@ -167,7 +167,7 @@
     {
       "id": "fuel_cost_cards",
       "label": "Fuel cost / fuel cards",
-      "threshold": 0.6,
+      "threshold": 0.7,
       "equation_id": "E4",
       "trigger_phrases": [
         "fuel is killing us",
@@ -178,7 +178,7 @@
     {
       "id": "asset_utilization_revenue",
       "label": "Asset utilization / revenue per truck",
-      "threshold": 0.75,
+      "threshold": 0.85,
       "equation_id": "E5",
       "trigger_phrases": [
         "want more out of each truck",
@@ -227,6 +227,31 @@
   },
   "extraction": {
     "numeric_confidence_threshold": 0.8
+  },
+  "qualitative_buckets": {
+    "S": {
+      "strongly_contracted": 0.1,
+      "mostly_contracted": 0.3,
+      "balanced": 0.5,
+      "mostly_spot": 0.7,
+      "strongly_spot": 0.9
+    },
+    "Du": {
+      "fully_billed": 0.1,
+      "mostly_collected": 0.3,
+      "partial": 0.5,
+      "mostly_uncaptured": 0.7,
+      "barely_collected": 0.9
+    }
+  },
+  "evidence_verification": {
+    "enabled": true,
+    "min_length_chars": 5,
+    "normalize": {
+      "lowercase": true,
+      "strip_punctuation": true,
+      "collapse_whitespace": true
+    }
   },
   "sanity_bands": {
     "loads_per_truck_per_year": {

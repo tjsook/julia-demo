@@ -83,6 +83,49 @@ class JuliaExtractionConfig(BaseModel):
     numeric_confidence_threshold: float = Field(ge=0.0, le=1.0)
 
 
+class JuliaQualitativeBucketsS(BaseModel):
+    """Bucket values for S qualitative extraction tags."""
+
+    strongly_contracted: float = Field(ge=0.0, le=1.0)
+    mostly_contracted: float = Field(ge=0.0, le=1.0)
+    balanced: float = Field(ge=0.0, le=1.0)
+    mostly_spot: float = Field(ge=0.0, le=1.0)
+    strongly_spot: float = Field(ge=0.0, le=1.0)
+
+
+class JuliaQualitativeBucketsDu(BaseModel):
+    """Bucket values for Du qualitative extraction tags."""
+
+    fully_billed: float = Field(ge=0.0, le=1.0)
+    mostly_collected: float = Field(ge=0.0, le=1.0)
+    partial: float = Field(ge=0.0, le=1.0)
+    mostly_uncaptured: float = Field(ge=0.0, le=1.0)
+    barely_collected: float = Field(ge=0.0, le=1.0)
+
+
+class JuliaQualitativeBucketsConfig(BaseModel):
+    """Calibration-backed qualitative-to-numeric mappings for S and Du."""
+
+    S: JuliaQualitativeBucketsS
+    Du: JuliaQualitativeBucketsDu
+
+
+class JuliaEvidenceVerificationNormalize(BaseModel):
+    """Normalization options used during pain-point evidence checks."""
+
+    lowercase: bool = True
+    strip_punctuation: bool = True
+    collapse_whitespace: bool = True
+
+
+class JuliaEvidenceVerificationConfig(BaseModel):
+    """Pain-point evidence verification controls."""
+
+    enabled: bool = True
+    min_length_chars: int = Field(ge=1)
+    normalize: JuliaEvidenceVerificationNormalize
+
+
 class JuliaSanityBand(BaseModel):
     """A soft warning band used for implied-ratio honesty markers."""
 
@@ -118,6 +161,8 @@ class JuliaCalibrationModel(BaseModel):
     pain_points: list[JuliaPainPointConfig]
     intent_classifier: JuliaIntentClassifierConfig
     extraction: JuliaExtractionConfig
+    qualitative_buckets: JuliaQualitativeBucketsConfig
+    evidence_verification: JuliaEvidenceVerificationConfig
     sanity_bands: JuliaSanityBandsConfig
 
     @model_validator(mode="after")
