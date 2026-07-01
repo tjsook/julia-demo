@@ -103,6 +103,9 @@ class Settings(BaseSettings):
     # URL affiliates land on after accepting an invitation
     AFFILIATE_DASHBOARD_URL: str = "https://hemutpartners.com"
 
+    # Affiliate Program — PropelAuth (JWT verification for affiliate-facing endpoints)
+    PROPELAUTH_VERIFIER_KEY: str | None = None
+
     # Affiliate Banking — encryption + admin unlock gate (Phase G contract overhaul)
     BANKING_ENCRYPTION_KEY: str | None = None   # pgp_sym_encrypt key; passed to DB RPC
     BANKING_VIEW_PASSWORD: str | None = None    # admin password to obtain unlock JWT
