@@ -10,7 +10,7 @@ export default function JuliaDemoPage() {
   return (
     <>
       <Head>
-        <title>Julia Demo | Diesel Dashboard</title>
+        <title>Julia Demo | GTM Dashboard</title>
       </Head>
       <DemoShell
         state={demo.state}

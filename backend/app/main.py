@@ -27,6 +27,7 @@ from app.core.logging import configure_logging, get_logger
 from app.middleware.request_id import RequestIDMiddleware
 from app.routers import (
     calculation_routes,
+    dashboard_preferences_routes,
     fueling_routes,
     health_routes,
     internal_jobs,
@@ -124,6 +125,7 @@ def create_app(*, root_path: str = "") -> FastAPI:
     application.include_router(waitlist_router)
     application.include_router(commission_admin_router)
     application.include_router(julia_router)
+    application.include_router(dashboard_preferences_routes.router)
     return application
 
 

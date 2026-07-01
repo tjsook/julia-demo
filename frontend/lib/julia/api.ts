@@ -1,4 +1,4 @@
-import { getSession } from "next-auth/react";
+import { getDashboardAuthHeaders } from "../dashboard-auth";
 import { cacheInvalidatePrefix } from "../session-cache";
 import type {
   JuliaDocument,
@@ -30,17 +30,6 @@ export class JuliaApiError extends Error {
   }
 }
 
-async function dashboardAuthHeaders(): Promise<HeadersInit> {
-  const session = await getSession();
-  if (session?.authError) {
-    throw new Error(`Dashboard session auth failed: ${session.authError}`);
-  }
-  if (!session?.idToken) {
-    throw new Error("Dashboard session is missing a Google ID token. Sign out and sign in again.");
-  }
-  return { Authorization: `Bearer ${session.idToken}` };
-}
-
 async function parseJuliaJson<T>(res: Response, fallback: string): Promise<T> {
   if (res.ok) return res.json() as Promise<T>;
 
@@ -67,7 +56,7 @@ function isJuliaError(body: unknown): body is { error: string; detail: string } 
 export async function fetchJuliaDocuments(
   status: JuliaDocumentStatus,
 ): Promise<JuliaDocumentListResponse> {
-  const headers = await dashboardAuthHeaders();
+  const headers = await getDashboardAuthHeaders();
   const res = await fetch(`${BASE_URL}/julia/documents?status=${status}`, {
     headers,
     cache: "no-store",
@@ -76,7 +65,7 @@ export async function fetchJuliaDocuments(
 }
 
 export async function uploadJuliaDocument(payload: JuliaUploadPayload): Promise<JuliaDocument> {
-  const headers = await dashboardAuthHeaders();
+  const headers = await getDashboardAuthHeaders();
   const form = new FormData();
   form.set("file", payload.file);
   form.set("title", payload.title);
@@ -95,7 +84,7 @@ export async function updateJuliaDocument(
   documentId: string,
   payload: JuliaEditPayload,
 ): Promise<JuliaDocument> {
-  const headers = await dashboardAuthHeaders();
+  const headers = await getDashboardAuthHeaders();
   const form = new FormData();
   if (payload.title !== undefined) form.set("title", payload.title);
   if (payload.aliases !== undefined) form.set("aliases", payload.aliases);
@@ -112,7 +101,7 @@ export async function updateJuliaDocument(
 }
 
 export async function hardDeleteJuliaDocument(documentId: string): Promise<void> {
-  const headers = await dashboardAuthHeaders();
+  const headers = await getDashboardAuthHeaders();
   const res = await fetch(`${BASE_URL}/julia/documents/${encodeURIComponent(documentId)}`, {
     method: "DELETE",
     headers,
@@ -125,7 +114,7 @@ export async function hardDeleteJuliaDocument(documentId: string): Promise<void>
 }
 
 export async function fetchJuliaSignedUrl(documentId: string): Promise<JuliaSignedUrlResponse> {
-  const headers = await dashboardAuthHeaders();
+  const headers = await getDashboardAuthHeaders();
   const res = await fetch(
     `${BASE_URL}/julia/documents/${encodeURIComponent(documentId)}/signed-url`,
     { headers, cache: "no-store" },
@@ -136,7 +125,7 @@ export async function fetchJuliaSignedUrl(documentId: string): Promise<JuliaSign
 export async function postJuliaVoiceIntent(
   recording: JuliaRecordedAudio,
 ): Promise<JuliaVoiceIntentResponse> {
-  const headers = await dashboardAuthHeaders();
+  const headers = await getDashboardAuthHeaders();
   const form = new FormData();
   form.set("audio", recording.blob, recording.filename);
   const res = await fetch(`${BASE_URL}/julia/voice/intent`, {
@@ -150,7 +139,7 @@ export async function postJuliaVoiceIntent(
 export async function postJuliaVoiceDocumentConfirmation(
   documentId: string,
 ): Promise<JuliaVoicePlaybackResponse> {
-  const headers = await dashboardAuthHeaders();
+  const headers = await getDashboardAuthHeaders();
   const res = await fetch(
     `${BASE_URL}/julia/voice/documents/${encodeURIComponent(documentId)}/confirmation`,
     {

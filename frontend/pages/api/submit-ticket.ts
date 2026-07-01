@@ -42,7 +42,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       teamId,
       projectId,
       title: `SUPPORT TICKET: ${title}`,
-      description: `${description}\n\n---\nSubmitted via Diesel Dashboard\n- Area: ${area}`,
+      description: `${description}\n\n---\nSubmitted via GTM Dashboard\n- Area: ${area}`,
     },
   };
 
