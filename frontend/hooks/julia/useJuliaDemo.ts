@@ -86,12 +86,51 @@ type OpenDocumentOptions = {
 };
 
 const GREETING_PLAYBACK_CACHE = new Map<string, JuliaVoicePlaybackResponse>();
-const PROCESSING_SPLASH_LINES = [
-  "syncing transcript",
-  "matching pain signals",
-  "resolving required fields",
-  "building ROI model",
+const PROCESSING_SPLASH_BASE_LINES = [
+  "await stt.normalize(transcript)",
+  "tokens = tokenize(transcript)",
+  "router.classify_intent(tokens)",
+  "schema.validate({ strict: true })",
+  "context.load(calibration.v1)",
+  "queue.push('julia.pipeline')",
+  "if (confidence < threshold) reprompt()",
+  "session.diff(required_fields, collected_fields)",
+  "resolver.next_missing_field()",
+  "metrics.emit('thinking_tick')",
 ] as const;
+const PROCESSING_SPLASH_STAGE_LINES: Record<GuidedConversationStage, readonly string[]> = {
+  initial_intent: [
+    "intent = classify_intent(transcript)",
+    "if (intent == 'doc') search(active_documents)",
+    "if (intent == 'roi') bootstrap(session)",
+  ],
+  company: [
+    "company_name = normalize_company_name(text)",
+    "company_name = strip_disfluency_prefix(company_name)",
+    "if (!company_name) ask('Which company is this for?')",
+  ],
+  pain_points: [
+    "pain_points = extract_roi_pain_points(transcript)",
+    "score(trigger_phrases, evidence)",
+    "rank(pain_points, by='confidence')",
+    "map('zero algorithms' -> manual_load_matching)",
+  ],
+  numeric_fields: [
+    "numeric = parse_numeric_answer(transcript)",
+    "normalize(percent -> fraction)",
+    "validate(range_constraints)",
+    "resolved_inputs[field] = rep_value",
+  ],
+  confirm_default: [
+    "confirm = parse_yes_no(transcript)",
+    "if (confirm == yes) apply(user_approved_default)",
+    "if (confirm == no) retain_missing(field)",
+  ],
+  complete: [
+    "roi = evaluate_guided_roi(session)",
+    "render(roi_payload)",
+  ],
+};
 const ENABLE_PROCESSING_FILLER_AUDIO = false;
 
 export function useJuliaDemo() {
@@ -256,6 +295,10 @@ export function useJuliaDemo() {
     }
     return null;
   }, [conversationStage, roiPayload, state]);
+  const processingSplashLines = useMemo(
+    () => buildProcessingSplashLines({ stage: conversationStage, expectedField }),
+    [conversationStage, expectedField],
+  );
 
   const handleIntent = useCallback((response: JuliaVoiceIntentResponse) => {
     appendDebugStageTranscript({
@@ -571,11 +614,14 @@ export function useJuliaDemo() {
       setProcessingSplashIndex(0);
       return;
     }
+    if (processingSplashLines.length <= 1) {
+      return;
+    }
     const intervalId = window.setInterval(() => {
-      setProcessingSplashIndex((current) => (current + 1) % PROCESSING_SPLASH_LINES.length);
+      setProcessingSplashIndex((current) => (current + 1) % processingSplashLines.length);
     }, 1100);
     return () => window.clearInterval(intervalId);
-  }, [state]);
+  }, [processingSplashLines.length, state]);
 
   useEffect(() => {
     if (!terminalCancelMessage) return;
@@ -821,7 +867,8 @@ export function useJuliaDemo() {
     currentQuestionText,
     activeSubtitleText,
     showProcessingSplash: state === "processing" && activeSubtitleText === null,
-    processingSplashLine: PROCESSING_SPLASH_LINES[processingSplashIndex],
+    processingSplashLine:
+      processingSplashLines[processingSplashIndex % processingSplashLines.length] ?? "processing...",
     roiProgressStep,
     requiredNumericCount: requiredNumericFields.length,
     collectedNumericCount,
@@ -994,6 +1041,25 @@ function isCancelTranscript(transcript: string): boolean {
   if (!remainder) return true;
   const words = remainder.split(/\s+/).filter(Boolean);
   return words.length <= 3 && !/\d/.test(remainder);
+}
+
+function buildProcessingSplashLines({
+  stage,
+  expectedField,
+}: {
+  stage: GuidedConversationStage;
+  expectedField: JuliaROIPendingField | null;
+}): string[] {
+  const stageLines = PROCESSING_SPLASH_STAGE_LINES[stage] ?? [];
+  const fieldLines = (
+    stage === "numeric_fields" || stage === "confirm_default"
+  ) && expectedField
+    ? [
+        `field<${expectedField}> :: capture()`,
+        `guard(field='${expectedField}', source='rep')`,
+      ]
+    : [];
+  return [...fieldLines, ...stageLines, ...PROCESSING_SPLASH_BASE_LINES];
 }
 
 function isTypingTarget(target: EventTarget | null): boolean {
