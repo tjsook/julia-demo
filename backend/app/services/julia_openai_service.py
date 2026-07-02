@@ -327,6 +327,18 @@ class JuliaOpenAIService:
                         f"- {pain.id} ({pain.label}): {', '.join(pain.trigger_phrases)}"
                         for pain in pain_points
                     )
+                    + "\n\nWhen the rep clearly describes the underlying issue of a pain point — even using words\n"
+                    "different from the trigger examples — match the pain point. The trigger examples show\n"
+                    "common patterns; they are not an exhaustive list. Base your judgment on what the rep\n"
+                    "actually means, then quote their exact words as evidence.\n\n"
+                    "Example — rep says \"they aren't using algorithms\":\n"
+                    "- MATCH manual_load_matching with evidence \"aren't using algorithms\"\n"
+                    "- DO NOT match if the rep is off-topic or unclear.\n\n"
+                    "Example — rep says \"spending 40 seconds per load putting in loads\":\n"
+                    "- MATCH manual_order_entry with evidence \"putting in loads\"\n"
+                    "- DO NOT paraphrase; quote the rep's actual words.\n\n"
+                    "If the rep is ambiguous (\"things are slow\"), still omit. This rule applies only to\n"
+                    "clear descriptions of the underlying issue."
                     + "\n\nNumeric extraction rules:\n"
                     "- Extract numbers ONLY if explicitly stated by the rep.\n"
                     "- If a variable is not mentioned with a specific number, return null.\n"
