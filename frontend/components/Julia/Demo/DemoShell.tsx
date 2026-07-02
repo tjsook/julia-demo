@@ -36,6 +36,7 @@ const statusLabel: Record<JuliaDemoState, string> = {
   "asking-initial-intent": "Listening Prompt",
   "collecting-company-name": "Company Question",
   "collecting-pain-points": "Pain-Point Question",
+  "collecting-roi-field": "ROI Field Question",
   "playing-roi-question": "Playing Prompt",
   "roi-pending-input": "Need Input",
 };
@@ -62,7 +63,11 @@ export function DemoShell({
       <div className={s.demoCenter}>
         <JuliaOrb state={state} onClick={onOrbClick} />
         <div className={s.demoStatus}>{statusLabel[state]}</div>
-        {currentQuestionText && <div className={s.demoQuestion}>{currentQuestionText}</div>}
+        {currentQuestionText && (
+          <div className={s.demoQuestion} role="status" aria-live="polite">
+            {currentQuestionText}
+          </div>
+        )}
       </div>
 
       {state === "showing-document" && (

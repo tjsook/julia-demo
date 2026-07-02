@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import {
   fetchJuliaSignedUrl,
+  postJuliaRoiFollowup,
   postJuliaVoiceDocumentConfirmation,
   postJuliaVoiceGreeting,
 } from "../../lib/julia/api";
@@ -14,20 +15,23 @@ import {
 import type {
   JuliaROIAnalysisPayload,
   JuliaROICollectionSession,
+  JuliaROIPendingField,
   JuliaVoiceIntentResponse,
   JuliaVoiceMatch,
   JuliaVoicePlaybackResponse,
 } from "../../lib/julia/types";
-import { useJuliaVoice, type JuliaVoiceDebugSnapshot } from "./useJuliaVoice";
-
-const ROI_PAIN_POINTS_QUESTION_TEXT =
-  "What pain points did you identify in their office or operation?";
+import {
+  useJuliaVoice,
+  type JuliaVoiceDebugSnapshot,
+  type JuliaVoiceSubmitter,
+} from "./useJuliaVoice";
 
 export type JuliaDemoState =
   | "idle"
   | "asking-initial-intent"
   | "collecting-company-name"
   | "collecting-pain-points"
+  | "collecting-roi-field"
   | "playing-roi-question"
   | "listening"
   | "processing"
@@ -36,7 +40,13 @@ export type JuliaDemoState =
   | "showing-roi-report"
   | "roi-pending-input";
 
-type GuidedConversationStage = "initial_intent" | "company" | "pain_points" | "complete";
+type GuidedConversationStage =
+  | "initial_intent"
+  | "company"
+  | "pain_points"
+  | "numeric_fields"
+  | "confirm_default"
+  | "complete";
 
 type JuliaTtsPlayback = {
   audioBase64: string;
@@ -53,7 +63,9 @@ type OpenDocumentOptions = {
 export function useJuliaDemo() {
   const { name, email } = useCurrentUser();
   const [state, setState] = useState<JuliaDemoState>("asking-initial-intent");
-  const [conversationStage, setConversationStage] = useState<GuidedConversationStage>("initial_intent");
+  const [conversationStage, setConversationStage] =
+    useState<GuidedConversationStage>("initial_intent");
+  const [expectedField, setExpectedField] = useState<JuliaROIPendingField | null>(null);
   const [errorToast, setErrorToast] = useState<string | null>(null);
   const [activeMatch, setActiveMatch] = useState<JuliaVoiceMatch | null>(null);
   const [selectorMatches, setSelectorMatches] = useState<JuliaVoiceMatch[]>([]);
@@ -64,7 +76,8 @@ export function useJuliaDemo() {
   const [documentError, setDocumentError] = useState<string | null>(null);
   const [roiPayload, setRoiPayload] = useState<JuliaROIAnalysisPayload | null>(null);
   const [roiPendingDetail, setRoiPendingDetail] = useState<string | null>(null);
-  const [roiCollectionSession, setRoiCollectionSession] = useState<JuliaROICollectionSession | null>(null);
+  const [roiCollectionSession, setRoiCollectionSession] =
+    useState<JuliaROICollectionSession | null>(null);
   const [currentQuestionText, setCurrentQuestionText] = useState<string | null>(null);
   const confirmationRequestRef = useRef(0);
   const hasPlayedGreetingRef = useRef(false);
@@ -118,85 +131,22 @@ export function useJuliaDemo() {
 
   const resetRoiCollection = useCallback(() => {
     setConversationStage("initial_intent");
+    setExpectedField(null);
     setRoiCollectionSession(null);
     setRoiPendingDetail(null);
   }, []);
 
-  const handleCompanyFollowup = useCallback((transcript: string) => {
-    const companyName = transcript.trim();
-    if (!companyName) {
-      setRoiPendingDetail("I still need the company name before we can continue.");
-      setCurrentQuestionText("Which company is this for?");
-      setState("collecting-company-name");
-      return;
-    }
-
-    setConversationStage("pain_points");
-    setCurrentQuestionText(ROI_PAIN_POINTS_QUESTION_TEXT);
-    setRoiPendingDetail("Company captured. Share their office or operational pain points next.");
-    setRoiCollectionSession((current) => {
-      if (!current) return current;
-      const answerTranscripts = [...current.answer_transcripts, transcript];
-      return {
-        ...current,
-        answer_transcripts: answerTranscripts,
-        company_name: companyName,
-        collected_fields: Array.from(new Set([...current.collected_fields, "company_name"])),
-        missing_fields: ["pain_points"],
-        stage: "pain_points",
-      };
-    });
-    setState("collecting-pain-points");
-  }, []);
-
-  const handlePainPointFollowup = useCallback((transcript: string) => {
-    const painPointTranscript = transcript.trim();
-    if (!painPointTranscript) {
-      setRoiPendingDetail("I could not capture the pain points. Please answer again.");
-      setCurrentQuestionText(ROI_PAIN_POINTS_QUESTION_TEXT);
-      setState("collecting-pain-points");
-      return;
-    }
-
-    setConversationStage("complete");
-    setRoiPendingDetail("Pain points captured. Branch 1 stops before numeric-field collection.");
-    setCurrentQuestionText(null);
-    setRoiCollectionSession((current) => {
-      if (!current) return current;
-      const answerTranscripts = [...current.answer_transcripts, transcript];
-      return {
-        ...current,
-        answer_transcripts: answerTranscripts,
-        collected_fields: Array.from(new Set([...current.collected_fields, "pain_points"])),
-        missing_fields: [],
-        stage: "complete",
-      };
-    });
-    setState("roi-pending-input");
-  }, []);
-
   const handleIntent = useCallback((response: JuliaVoiceIntentResponse) => {
     setLastVoiceResponse(response);
-
-    if (conversationStage === "company") {
-      handleCompanyFollowup(response.transcript);
-      return;
-    }
-
-    if (conversationStage === "pain_points") {
-      handlePainPointFollowup(response.transcript);
-      return;
-    }
-
     setActiveMatch(null);
     setSelectorMatches([]);
     setDocumentUrl(null);
     setDocumentError(null);
-    setRoiPayload(null);
 
     if (isSilentVoiceIntent(response)) {
       logSilentVoiceIntent(response);
-      setTtsPlayback(null);
+      resetRoiCollection();
+      setCurrentQuestionText("What can I do for you today?");
       setState("asking-initial-intent");
       return;
     }
@@ -205,48 +155,44 @@ export function useJuliaDemo() {
       if (!response.roi_payload) {
         throw new Error("ROI analysis response is missing roi_payload.");
       }
-      setTtsPlayback(playbackFromResponse(response, ["showing-roi-report"]));
       setRoiPayload(response.roi_payload);
+      setTtsPlayback(playbackFromResponse(response, ["showing-roi-report"]));
+      setConversationStage("complete");
+      setExpectedField(null);
+      setRoiCollectionSession(null);
+      setCurrentQuestionText(null);
       setState("showing-roi-report");
       return;
     }
 
     if (isRoiPendingInputIntent(response)) {
       const pending = response.roi_pending;
-      if (!pending?.detail) {
-        throw new Error("ROI pending-input response is missing roi_pending.detail.");
+      if (!pending?.detail || !pending.next_field || !pending.session) {
+        throw new Error("ROI pending-input response is missing required follow-up fields.");
       }
+
+      setRoiPayload(null);
       setRoiPendingDetail(pending.detail);
       setCurrentQuestionText(pending.question_text ?? pending.detail);
-      if (pending.session) {
-        setRoiCollectionSession(pending.session);
-      }
+      setExpectedField(pending.next_field);
+      setRoiCollectionSession(pending.session);
 
       if (pending.next_field === "company_name") {
         setConversationStage("company");
         setState("collecting-company-name");
-        setTtsPlayback(
-          playbackFromResponse(response, ["collecting-company-name"], {
-            autoStartListeningOnEnd: true,
-          }),
-        );
-        return;
-      }
-
-      if (pending.next_field === "pain_points") {
+      } else if (pending.next_field === "pain_points") {
         setConversationStage("pain_points");
         setState("collecting-pain-points");
-        setTtsPlayback(
-          playbackFromResponse(response, ["collecting-pain-points"], {
-            autoStartListeningOnEnd: true,
-          }),
-        );
-        return;
+      } else {
+        setConversationStage(pending.session.stage === "confirm_default" ? "confirm_default" : "numeric_fields");
+        setState("collecting-roi-field");
       }
 
-      setConversationStage("complete");
-      setState("roi-pending-input");
-      setTtsPlayback(playbackFromResponse(response, ["roi-pending-input"]));
+      setTtsPlayback(
+        playbackFromResponse(response, ["collecting-company-name", "collecting-pain-points", "collecting-roi-field"], {
+          autoStartListeningOnEnd: true,
+        }),
+      );
       return;
     }
 
@@ -280,7 +226,7 @@ export function useJuliaDemo() {
 
     setTtsPlayback(null);
     setState("idle");
-  }, [conversationStage, handleCompanyFollowup, handlePainPointFollowup, openDocument, resetRoiCollection]);
+  }, [openDocument, resetRoiCollection]);
 
   const handleError = useCallback((message: string) => {
     setErrorToast(message || "Something went wrong.");
@@ -295,23 +241,36 @@ export function useJuliaDemo() {
   });
   const debugSnapshot: JuliaVoiceDebugSnapshot = voice.debugSnapshot;
 
+  const submitFollowup: JuliaVoiceSubmitter = useCallback(async (recording) => {
+    if (!expectedField) {
+      throw new Error("ROI follow-up submit is missing expectedField.");
+    }
+    if (!roiCollectionSession) {
+      throw new Error("ROI follow-up submit is missing session state.");
+    }
+    return postJuliaRoiFollowup(recording, expectedField, roiCollectionSession);
+  }, [expectedField, roiCollectionSession]);
+
   const handleOrbClick = useCallback(() => {
     if (
       state === "idle" ||
       state === "asking-initial-intent" ||
       state === "collecting-company-name" ||
       state === "collecting-pain-points" ||
+      state === "collecting-roi-field" ||
       state === "roi-pending-input"
     ) {
       setState("listening");
       void voice.startListening();
       return;
     }
+
     if (state === "listening") {
       setState("processing");
-      void voice.stopAndSubmit();
+      const submitter = conversationStage === "initial_intent" ? undefined : submitFollowup;
+      void voice.stopAndSubmit(submitter);
     }
-  }, [state, voice]);
+  }, [conversationStage, state, submitFollowup, voice]);
 
   const cancelListening = useCallback(() => {
     voice.cancelListening();
@@ -321,6 +280,10 @@ export function useJuliaDemo() {
     }
     if (conversationStage === "pain_points") {
       setState("collecting-pain-points");
+      return;
+    }
+    if (conversationStage === "numeric_fields" || conversationStage === "confirm_default") {
+      setState("collecting-roi-field");
       return;
     }
     setState("idle");
@@ -374,7 +337,11 @@ export function useJuliaDemo() {
       if (event.key === "Escape") {
         resetRoiCollection();
         setCurrentQuestionText(null);
-        if (state === "collecting-company-name" || state === "collecting-pain-points") {
+        if (
+          state === "collecting-company-name" ||
+          state === "collecting-pain-points" ||
+          state === "collecting-roi-field"
+        ) {
           setState("idle");
         }
       }

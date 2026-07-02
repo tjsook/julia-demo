@@ -25,6 +25,10 @@ type UseJuliaVoiceOptions = {
   onError: (message: string) => void;
 };
 
+export type JuliaVoiceSubmitter = (
+  recording: JuliaRecordedAudio,
+) => Promise<JuliaVoiceIntentResponse>;
+
 export function useJuliaVoice({ onIntent, onError }: UseJuliaVoiceOptions) {
   const [status, setStatus] = useState<JuliaVoiceStatus>("idle");
   const [error, setError] = useState<string | null>(null);
@@ -118,7 +122,7 @@ export function useJuliaVoice({ onIntent, onError }: UseJuliaVoiceOptions) {
     });
   }, [chunkAudioSizeMb, clearRecordingResources, recordingDurationSeconds]);
 
-  const stopAndSubmit = useCallback(async () => {
+  const stopAndSubmit = useCallback(async (submitter?: JuliaVoiceSubmitter) => {
     if (statusRef.current !== "listening") return;
     statusRef.current = "processing";
     setStatus("processing");
@@ -134,7 +138,8 @@ export function useJuliaVoice({ onIntent, onError }: UseJuliaVoiceOptions) {
       }
       recorderRef.current = null;
       chunksRef.current = [];
-      const response = await postJuliaVoiceIntent(recording);
+      const submit = submitter ?? postJuliaVoiceIntent;
+      const response = await submit(recording);
       onIntent(response);
       setError(null);
       setDebugSnapshot({
