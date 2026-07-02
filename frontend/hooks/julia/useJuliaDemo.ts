@@ -48,6 +48,16 @@ type GuidedConversationStage =
   | "confirm_default"
   | "complete";
 
+type RoiProgressStep = "company" | "pain_points" | "numeric_fields" | "complete" | null;
+
+export type JuliaDebugStageTranscript = {
+  id: number;
+  stage: GuidedConversationStage | "error";
+  expectedField: JuliaROIPendingField | null;
+  transcript: string;
+  intent: string | null;
+};
+
 type JuliaTtsPlayback = {
   audioBase64: string;
   mimeType: string;
@@ -79,6 +89,8 @@ export function useJuliaDemo() {
   const [roiCollectionSession, setRoiCollectionSession] =
     useState<JuliaROICollectionSession | null>(null);
   const [currentQuestionText, setCurrentQuestionText] = useState<string | null>(null);
+  const [debugStageTranscripts, setDebugStageTranscripts] = useState<JuliaDebugStageTranscript[]>([]);
+  const debugEntryIdRef = useRef(0);
   const confirmationRequestRef = useRef(0);
   const hasPlayedGreetingRef = useRef(false);
 
@@ -136,7 +148,61 @@ export function useJuliaDemo() {
     setRoiPendingDetail(null);
   }, []);
 
+  const appendDebugStageTranscript = useCallback(
+    ({
+      stage,
+      expectedField: field,
+      transcript,
+      intent,
+    }: {
+      stage: GuidedConversationStage | "error";
+      expectedField: JuliaROIPendingField | null;
+      transcript: string;
+      intent: string | null;
+    }) => {
+      debugEntryIdRef.current += 1;
+      const entry: JuliaDebugStageTranscript = {
+        id: debugEntryIdRef.current,
+        stage,
+        expectedField: field,
+        transcript,
+        intent,
+      };
+      setDebugStageTranscripts((current) => [entry, ...current].slice(0, 10));
+    },
+    [],
+  );
+
+  const requiredNumericFields = useMemo(() => {
+    if (!roiCollectionSession) return [];
+    return roiCollectionSession.required_fields.filter(isRoiNumericField);
+  }, [roiCollectionSession]);
+
+  const collectedNumericCount = useMemo(() => {
+    if (!roiCollectionSession) return 0;
+    const resolved = new Set(Object.keys(roiCollectionSession.resolved_inputs));
+    return requiredNumericFields.filter((field) => resolved.has(field)).length;
+  }, [requiredNumericFields, roiCollectionSession]);
+
+  const roiProgressStep: RoiProgressStep = useMemo(() => {
+    if (state === "showing-roi-report" || conversationStage === "complete" || roiPayload) {
+      return "complete";
+    }
+    if (conversationStage === "company") return "company";
+    if (conversationStage === "pain_points") return "pain_points";
+    if (conversationStage === "numeric_fields" || conversationStage === "confirm_default") {
+      return "numeric_fields";
+    }
+    return null;
+  }, [conversationStage, roiPayload, state]);
+
   const handleIntent = useCallback((response: JuliaVoiceIntentResponse) => {
+    appendDebugStageTranscript({
+      stage: conversationStage,
+      expectedField,
+      transcript: response.transcript,
+      intent: response.intent,
+    });
     setLastVoiceResponse(response);
     setActiveMatch(null);
     setSelectorMatches([]);
@@ -172,7 +238,7 @@ export function useJuliaDemo() {
       }
 
       setRoiPayload(null);
-      setRoiPendingDetail(pending.detail);
+      setRoiPendingDetail(formatPendingDetail(pending.detail, pending.question_text ?? null));
       setCurrentQuestionText(pending.question_text ?? pending.detail);
       setExpectedField(pending.next_field);
       setRoiCollectionSession(pending.session);
@@ -226,14 +292,21 @@ export function useJuliaDemo() {
 
     setTtsPlayback(null);
     setState("idle");
-  }, [openDocument, resetRoiCollection]);
+  }, [appendDebugStageTranscript, conversationStage, expectedField, openDocument, resetRoiCollection]);
 
   const handleError = useCallback((message: string) => {
-    setErrorToast(message || "Something went wrong.");
+    const friendlyMessage = formatVoiceError(message);
+    appendDebugStageTranscript({
+      stage: "error",
+      expectedField,
+      transcript: `[${friendlyMessage}]`,
+      intent: null,
+    });
+    setErrorToast(friendlyMessage);
     setRoiPayload(null);
     setRoiPendingDetail(null);
     setState("idle");
-  }, []);
+  }, [appendDebugStageTranscript, expectedField]);
 
   const voice = useJuliaVoice({
     onIntent: handleIntent,
@@ -301,6 +374,8 @@ export function useJuliaDemo() {
     setDocumentLoading(false);
     setRoiPayload(null);
     setCurrentQuestionText(null);
+    setDebugStageTranscripts([]);
+    debugEntryIdRef.current = 0;
     resetRoiCollection();
   }, [resetRoiCollection]);
 
@@ -392,11 +467,15 @@ export function useJuliaDemo() {
     roiPendingDetail,
     roiCollectionSession,
     currentQuestionText,
+    roiProgressStep,
+    requiredNumericCount: requiredNumericFields.length,
+    collectedNumericCount,
     debugTranscript: debugSnapshot.transcript,
     debugStopReason: debugSnapshot.stopReason,
     debugAudioSizeMb: debugSnapshot.audioSizeMb,
     debugDurationSeconds: debugSnapshot.durationSeconds,
     debugRecording: debugSnapshot.recording,
+    debugStageTranscripts,
     handleOrbClick,
     openDocument,
     cancelListening,
@@ -404,6 +483,42 @@ export function useJuliaDemo() {
     dismissError: () => setErrorToast(null),
     dismissRoiPending: () => setRoiPendingDetail(null),
   };
+}
+
+function isRoiNumericField(field: JuliaROIPendingField): boolean {
+  return field === "T" || field === "Ld" || field === "S" || field === "Du" || field === "P" || field === "R" || field === "minutes_per_order";
+}
+
+function formatVoiceError(message: string | null | undefined): string {
+  const normalized = (message ?? "").trim();
+  if (!normalized) return "Julia ran into an error. Please try again.";
+
+  const lower = normalized.toLowerCase();
+  if (lower.includes("recording failed to start") || lower.includes("microphone")) {
+    return "Microphone access failed. Check browser permissions and try again.";
+  }
+  if (lower.includes("transcription")) {
+    return "Julia couldn't transcribe that answer. Please speak again.";
+  }
+  if (lower.includes("audio must be")) {
+    return normalized;
+  }
+  if (lower.includes("follow-up") || lower.includes("voice processing")) {
+    return "Julia couldn't process that answer. Please try the same question again.";
+  }
+  return normalized;
+}
+
+function formatPendingDetail(detail: string, questionText: string | null): string {
+  const trimmed = detail.trim();
+  if (trimmed.startsWith("I could not capture")) {
+    if (questionText) return `I didn't catch that. ${questionText}`;
+    return "I didn't catch that. Please answer again.";
+  }
+  if (trimmed.startsWith("Default approval required")) {
+    return "Please confirm yes or no before Julia uses the default.";
+  }
+  return trimmed;
 }
 
 function playbackFromResponse(

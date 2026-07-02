@@ -23,6 +23,9 @@ export default function JuliaDemoPage() {
         roiPayload={demo.roiPayload}
         roiPendingDetail={demo.roiPendingDetail}
         currentQuestionText={demo.currentQuestionText}
+        roiProgressStep={demo.roiProgressStep}
+        requiredNumericCount={demo.requiredNumericCount}
+        collectedNumericCount={demo.collectedNumericCount}
         onOrbClick={demo.handleOrbClick}
         onSelectMatch={(match) => void demo.openDocument(match)}
         onCloseForeground={demo.closeForeground}
@@ -35,6 +38,7 @@ export default function JuliaDemoPage() {
         audioSizeMb={demo.debugAudioSizeMb}
         durationSeconds={demo.debugDurationSeconds}
         recording={demo.debugRecording}
+        stageTranscripts={demo.debugStageTranscripts}
       />
     </>
   );

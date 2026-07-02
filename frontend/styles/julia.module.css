@@ -485,6 +485,66 @@
   text-align: center;
 }
 
+.demoHint {
+  max-width: min(680px, calc(100vw - 40px));
+  color: rgba(255, 255, 255, 0.66);
+  font-size: 13px;
+  line-height: 1.45;
+  text-align: center;
+}
+
+.roiProgress {
+  width: min(680px, calc(100vw - 40px));
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.04);
+  padding: 10px 12px;
+}
+
+.roiProgressTitle {
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 11px;
+  font-weight: 760;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.roiProgressList {
+  list-style: none;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.roiProgressList li {
+  min-height: 30px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 10px;
+  font-size: 12px;
+  font-weight: 740;
+}
+
+.roiProgressDone {
+  border-color: rgba(245, 197, 24, 0.5) !important;
+  background: rgba(245, 197, 24, 0.2);
+  color: #fde68a;
+}
+
+.roiProgressActive {
+  border-color: rgba(245, 197, 24, 0.85) !important;
+  background: rgba(245, 197, 24, 0.32);
+  color: #ffffff;
+}
+
+.roiProgressUpcoming {
+  color: rgba(255, 255, 255, 0.66);
+}
+
 .juliaDebugPanel {
   position: fixed;
   left: 16px;
@@ -532,6 +592,43 @@
   font-size: 10px;
   font-weight: 700;
   text-transform: uppercase;
+}
+
+.juliaDebugHistory {
+  margin-top: 8px;
+}
+
+.juliaDebugHistoryEmpty {
+  color: rgba(255, 255, 255, 0.62);
+}
+
+.juliaDebugHistoryList {
+  list-style: none;
+  margin-top: 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.juliaDebugHistoryItem {
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 6px;
+  padding: 6px 7px;
+}
+
+.juliaDebugHistoryMeta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  color: rgba(255, 255, 255, 0.62);
+  font-size: 10px;
+  text-transform: uppercase;
+}
+
+.juliaDebugHistoryItem pre {
+  margin-top: 4px;
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 
 .juliaDebugTranscript pre {
@@ -1141,5 +1238,27 @@
 
   .roiInputSource {
     grid-area: source;
+  }
+
+  .demoCenter {
+    padding: 18px 14px;
+    gap: 14px;
+  }
+
+  .demoQuestion {
+    font-size: 16px;
+  }
+
+  .demoHint {
+    font-size: 12px;
+  }
+
+  .roiProgress {
+    width: calc(100vw - 28px);
+    padding: 9px 10px;
+  }
+
+  .roiProgressList {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
