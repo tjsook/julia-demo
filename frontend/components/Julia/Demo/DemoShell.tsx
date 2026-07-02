@@ -64,25 +64,32 @@ export function DemoShell({
   onDismissError,
   onDismissRoiPending,
 }: DemoShellProps) {
-  const interactionHint = hintTextForState(state);
-  const progressSteps = roiProgressStep
+  const isDebugMode = process.env.NEXT_PUBLIC_JULIA_DEBUG_MODE === "true";
+  const interactionHint = isDebugMode ? hintTextForState(state) : null;
+  const progressSteps = isDebugMode && roiProgressStep
     ? buildProgressSteps({
         current: roiProgressStep,
         requiredNumericCount,
         collectedNumericCount,
       })
     : [];
+  const compactStatusLabel = state === "listening" ? "Listening" : state === "processing" ? "Thinking" : "Ready";
 
   return (
     <main className={s.demoMain}>
       <div className={s.demoCenter}>
         <JuliaOrb state={state} onClick={onOrbClick} />
-        <div className={s.demoStatus}>{statusLabel[state]}</div>
+        <div className={s.demoStatus}>{isDebugMode ? statusLabel[state] : compactStatusLabel}</div>
         {interactionHint && <div className={s.demoHint}>{interactionHint}</div>}
         {currentQuestionText && (
-          <div className={s.demoQuestion} role="status" aria-live="polite">
-            {currentQuestionText}
-          </div>
+          <>
+            <div className={s.screenReaderOnly} role="status" aria-live="polite">
+              {currentQuestionText}
+            </div>
+            <div className={isDebugMode ? s.demoQuestion : s.demoQuestionSubtle} aria-hidden="true">
+              {currentQuestionText}
+            </div>
+          </>
         )}
         {progressSteps.length > 0 && (
           <section className={s.roiProgress} aria-label="ROI progress">

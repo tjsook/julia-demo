@@ -5,6 +5,7 @@ from __future__ import annotations
 import base64
 import json
 import logging
+import re
 import time
 from typing import Annotated
 
@@ -163,8 +164,30 @@ def _synthesize_voice_response(
 def _normalize_company_name(raw_company_name: str | None) -> str | None:
     if raw_company_name is None:
         return None
-    trimmed = raw_company_name.strip()
-    return trimmed or None
+    normalized = raw_company_name.strip()
+    if not normalized:
+        return None
+
+    # Strip common leading disfluencies while preserving actual company tokens.
+    normalized = re.sub(
+        r"^(?:(?:uh+|um+|erm+|ah+|hmm+|mm+|mhm|huh)\s*[,.\-:;]*\s*)+",
+        "",
+        normalized,
+        flags=re.IGNORECASE,
+    )
+
+    # Strip conversational wrappers frequently produced by STT/LLM around the company name.
+    normalized = re.sub(r"^(?:i\s*(?:am|'m)\s+with\s+)", "", normalized, flags=re.IGNORECASE)
+    normalized = re.sub(r"^(?:we\s*(?:are|'re)\s+with\s+)", "", normalized, flags=re.IGNORECASE)
+    normalized = re.sub(r"^(?:this\s+is\s+for\s+)", "", normalized, flags=re.IGNORECASE)
+    normalized = re.sub(r"^(?:for\s+)", "", normalized, flags=re.IGNORECASE)
+    normalized = re.sub(r"\s+(?:here|right)\s*[.?!,;:]*$", "", normalized, flags=re.IGNORECASE)
+
+    # Final punctuation/whitespace cleanup.
+    normalized = re.sub(r"^[\"'`]+|[\"'`]+$", "", normalized)
+    normalized = re.sub(r"[.?!,;:]+$", "", normalized)
+    normalized = re.sub(r"\s+", " ", normalized).strip()
+    return normalized or None
 
 
 def _greeting_name(raw_first_name: str | None) -> str:
@@ -252,10 +275,12 @@ def _resolved_input_from_followup_result(
     *,
     field: str,
     value: float | None,
+    unit: str | None,
     qualitative_tag: str | None,
     confidence: float,
     session: JuliaROICollectionSession,
     calibration,
+    followup_markers: list[str] | None = None,
 ) -> JuliaResolvedInput:
     if field == "T":
         if value is None:
@@ -289,9 +314,16 @@ def _resolved_input_from_followup_result(
     if field == "minutes_per_order":
         if value is None:
             raise ValueError("Minutes per order entry value is missing.")
-        if value <= 0:
+        normalized_value = float(value)
+        if unit == "hours":
+            normalized_value = normalized_value * 60.0
+            if followup_markers is not None:
+                followup_markers.append(
+                    f"Converted minutes_per_order from hours to minutes ({value:g}h -> {normalized_value:g}m)."
+                )
+        if normalized_value <= 0:
             raise ValueError("Minutes per order entry must be greater than 0.")
-        return JuliaResolvedInput(value=float(value), source="rep", confidence=confidence)
+        return JuliaResolvedInput(value=normalized_value, source="rep", confidence=confidence)
     if field in {"S", "Du"}:
         if value is not None:
             if value < 0 or value > 1:
@@ -710,6 +742,7 @@ async def voice_roi_followup(
         transcript=transcript,
         calibration=calibration,
     )
+    followup_confidence_threshold = calibration.extraction.numeric_confidence_threshold
     engine = _roi_engine()
 
     def pending_response(
@@ -858,10 +891,12 @@ async def voice_roi_followup(
                 session_state.resolved_inputs[field] = _resolved_input_from_followup_result(
                     field=field,
                     value=getattr(candidate, "value", None),
+                    unit=getattr(candidate, "unit", None),
                     qualitative_tag=getattr(candidate, "qualitative_tag", None),
                     confidence=float(getattr(candidate, "confidence", 0.0)),
                     session=session_state,
                     calibration=calibration,
+                    followup_markers=session_state.followup_markers,
                 )
                 session_state.collected_fields = _merge_unique(session_state.collected_fields, [field])
             except ValueError:
@@ -959,7 +994,31 @@ async def voice_roi_followup(
                 ),
             )
 
-        if followup_result.status in {"no_answer", "needs_confirmation"}:
+        extracted_value = (
+            followup_result.normalized_value
+            if expected_field in {"S", "Du"} and followup_result.normalized_value is not None
+            else followup_result.value
+        )
+        has_captured_value = extracted_value is not None or followup_result.qualitative_tag is not None
+        status = followup_result.status
+        if (
+            status == "needs_confirmation"
+            and has_captured_value
+            and followup_result.confidence >= followup_confidence_threshold
+        ):
+            status = "value_captured"
+
+        if status == "value_captured" and followup_result.confidence < followup_confidence_threshold:
+            return pending_response(
+                next_field=expected_field,
+                detail=(
+                    f"I heard a possible {_field_label(expected_field)}, but I need a clearer answer. "
+                    f"{_question_text_for_field(expected_field)}"
+                ),
+                stage="numeric_fields",
+            )
+
+        if status in {"no_answer", "needs_confirmation"}:
             return pending_response(
                 next_field=expected_field,
                 detail=f"I could not capture {_field_label(expected_field)}. {_question_text_for_field(expected_field)}",
@@ -969,11 +1028,13 @@ async def voice_roi_followup(
         try:
             session_state.resolved_inputs[expected_field] = _resolved_input_from_followup_result(
                 field=expected_field,
-                value=followup_result.value,
+                value=extracted_value,
+                unit=followup_result.unit,
                 qualitative_tag=followup_result.qualitative_tag,
                 confidence=followup_result.confidence,
                 session=session_state,
                 calibration=calibration,
+                followup_markers=session_state.followup_markers,
             )
         except ValueError as exc:
             return pending_response(

@@ -391,11 +391,14 @@ export function useJuliaDemo() {
     void (async () => {
       try {
         const response = await postJuliaVoiceGreeting(spokenName);
-        setTtsPlayback(
-          playbackFromResponse(response, ["asking-initial-intent"], {
-            autoStartListeningOnEnd: true,
-          }),
-        );
+        const greetingPlayback = playbackFromResponse(response, ["asking-initial-intent"], {
+          autoStartListeningOnEnd: true,
+        });
+        if (!greetingPlayback) {
+          setErrorToast("Julia couldn't play the greeting audio. Click the orb to start.");
+          return;
+        }
+        setTtsPlayback(greetingPlayback);
       } catch (err) {
         setErrorToast(err instanceof Error ? err.message : "Failed to load Julia greeting.");
       }
@@ -445,6 +448,7 @@ export function useJuliaDemo() {
         event: "julia.tts.play_failed",
         error: err instanceof Error ? err.message : "Audio playback failed.",
       });
+      setErrorToast("Julia couldn't play that prompt. Click the orb to continue.");
     });
 
     return () => {

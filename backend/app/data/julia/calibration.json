@@ -106,7 +106,12 @@
         "don't use algorithms",
         "no matching software",
         "no automation for dispatch",
-        "no dispatch tool"
+        "no dispatch tool",
+        "zero algorithms",
+        "zero algorithms for planning",
+        "using zero algorithms for planning",
+        "not using algorithms for planning",
+        "no planning algorithms"
       ]
     },
     {
@@ -308,7 +313,7 @@
     ]
   },
   "extraction": {
-    "numeric_confidence_threshold": 0.8
+    "numeric_confidence_threshold": 0.7
   },
   "qualitative_buckets": {
     "S": {

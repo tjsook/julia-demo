@@ -9,6 +9,7 @@ type JuliaDebugPanelProps = {
   durationSeconds: number | null;
   recording: boolean;
   stageTranscripts: JuliaDebugStageTranscript[];
+  currentQuestionText: string | null;
 };
 
 export function JuliaDebugPanel({
@@ -18,6 +19,7 @@ export function JuliaDebugPanel({
   durationSeconds,
   recording,
   stageTranscripts,
+  currentQuestionText,
 }: JuliaDebugPanelProps) {
   if (process.env.NEXT_PUBLIC_JULIA_DEBUG_MODE !== "true") {
     return null;
@@ -64,6 +66,10 @@ export function JuliaDebugPanel({
                 ))}
               </ul>
             )}
+          </div>
+          <div className={s.juliaDebugTranscript}>
+            <div className={s.juliaDebugTranscriptLabel}>Current question</div>
+            <pre>{currentQuestionText ?? "n/a"}</pre>
           </div>
           <div className={s.juliaDebugTranscript}>
             <div className={s.juliaDebugTranscriptLabel}>Transcript</div>

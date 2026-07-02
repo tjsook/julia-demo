@@ -39,6 +39,7 @@ export default function JuliaDemoPage() {
         durationSeconds={demo.debugDurationSeconds}
         recording={demo.debugRecording}
         stageTranscripts={demo.debugStageTranscripts}
+        currentQuestionText={demo.currentQuestionText}
       />
     </>
   );
