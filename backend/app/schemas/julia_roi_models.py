@@ -25,6 +25,8 @@ INPUT_SYMBOLS: tuple[str, ...] = ("T", "S", "P", "Ld", "Du")
 EquationId = Literal["E1", "E2", "E3", "E3a", "E3b", "E3c", "E4", "E5"]
 InputSymbol = Literal["T", "S", "P", "Ld", "Du"]
 InputSource = Literal["rep", "rep_qualitative", "derived", "default"]
+ROIPendingField = Literal["fleet_size", "company_name", "pain_points", "T", "S", "P", "Ld", "Du"]
+ROICollectionStage = Literal["intent", "company", "pain_points", "numeric_fields", "complete"]
 
 
 class JuliaCalibrationConstant(BaseModel):
@@ -312,11 +314,28 @@ class JuliaROIAnalysisPayload(BaseModel):
     honesty_markers: list[str] = Field(default_factory=list)
 
 
+class JuliaROICollectionSession(BaseModel):
+    """In-progress guided ROI collection state mirrored by the frontend."""
+
+    original_transcript: str
+    answer_transcripts: list[str] = Field(default_factory=list)
+    company_name: str | None = None
+    matched_pain_points: list[JuliaPainPointMatch] = Field(default_factory=list)
+    variables: JuliaExtractionVariables = Field(default_factory=JuliaExtractionVariables)
+    required_fields: list[ROIPendingField] = Field(default_factory=list)
+    collected_fields: list[ROIPendingField] = Field(default_factory=list)
+    missing_fields: list[ROIPendingField] = Field(default_factory=list)
+    stage: ROICollectionStage = "intent"
+
+
 class JuliaROIPendingInput(BaseModel):
     """Prompt shown when required ROI fields are missing."""
 
-    missing: list[Literal["fleet_size"]]
+    missing: list[ROIPendingField]
+    next_field: ROIPendingField | None = None
+    question_text: str | None = None
     detail: str
+    session: JuliaROICollectionSession | None = None
 
 
 class JuliaROIEngineResult(BaseModel):
