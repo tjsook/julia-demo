@@ -50,6 +50,14 @@ type GuidedConversationStage =
 
 type RoiProgressStep = "company" | "pain_points" | "numeric_fields" | "complete" | null;
 
+export type JuliaDebugStageTranscript = {
+  id: number;
+  stage: GuidedConversationStage | "error";
+  expectedField: JuliaROIPendingField | null;
+  transcript: string;
+  intent: string | null;
+};
+
 type JuliaTtsPlayback = {
   audioBase64: string;
   mimeType: string;
@@ -81,6 +89,8 @@ export function useJuliaDemo() {
   const [roiCollectionSession, setRoiCollectionSession] =
     useState<JuliaROICollectionSession | null>(null);
   const [currentQuestionText, setCurrentQuestionText] = useState<string | null>(null);
+  const [debugStageTranscripts, setDebugStageTranscripts] = useState<JuliaDebugStageTranscript[]>([]);
+  const debugEntryIdRef = useRef(0);
   const confirmationRequestRef = useRef(0);
   const hasPlayedGreetingRef = useRef(false);
 
@@ -138,6 +148,31 @@ export function useJuliaDemo() {
     setRoiPendingDetail(null);
   }, []);
 
+  const appendDebugStageTranscript = useCallback(
+    ({
+      stage,
+      expectedField: field,
+      transcript,
+      intent,
+    }: {
+      stage: GuidedConversationStage | "error";
+      expectedField: JuliaROIPendingField | null;
+      transcript: string;
+      intent: string | null;
+    }) => {
+      debugEntryIdRef.current += 1;
+      const entry: JuliaDebugStageTranscript = {
+        id: debugEntryIdRef.current,
+        stage,
+        expectedField: field,
+        transcript,
+        intent,
+      };
+      setDebugStageTranscripts((current) => [entry, ...current].slice(0, 10));
+    },
+    [],
+  );
+
   const requiredNumericFields = useMemo(() => {
     if (!roiCollectionSession) return [];
     return roiCollectionSession.required_fields.filter(isRoiNumericField);
@@ -162,6 +197,12 @@ export function useJuliaDemo() {
   }, [conversationStage, roiPayload, state]);
 
   const handleIntent = useCallback((response: JuliaVoiceIntentResponse) => {
+    appendDebugStageTranscript({
+      stage: conversationStage,
+      expectedField,
+      transcript: response.transcript,
+      intent: response.intent,
+    });
     setLastVoiceResponse(response);
     setActiveMatch(null);
     setSelectorMatches([]);
@@ -251,14 +292,21 @@ export function useJuliaDemo() {
 
     setTtsPlayback(null);
     setState("idle");
-  }, [openDocument, resetRoiCollection]);
+  }, [appendDebugStageTranscript, conversationStage, expectedField, openDocument, resetRoiCollection]);
 
   const handleError = useCallback((message: string) => {
-    setErrorToast(formatVoiceError(message));
+    const friendlyMessage = formatVoiceError(message);
+    appendDebugStageTranscript({
+      stage: "error",
+      expectedField,
+      transcript: `[${friendlyMessage}]`,
+      intent: null,
+    });
+    setErrorToast(friendlyMessage);
     setRoiPayload(null);
     setRoiPendingDetail(null);
     setState("idle");
-  }, []);
+  }, [appendDebugStageTranscript, expectedField]);
 
   const voice = useJuliaVoice({
     onIntent: handleIntent,
@@ -326,6 +374,8 @@ export function useJuliaDemo() {
     setDocumentLoading(false);
     setRoiPayload(null);
     setCurrentQuestionText(null);
+    setDebugStageTranscripts([]);
+    debugEntryIdRef.current = 0;
     resetRoiCollection();
   }, [resetRoiCollection]);
 
@@ -425,6 +475,7 @@ export function useJuliaDemo() {
     debugAudioSizeMb: debugSnapshot.audioSizeMb,
     debugDurationSeconds: debugSnapshot.durationSeconds,
     debugRecording: debugSnapshot.recording,
+    debugStageTranscripts,
     handleOrbClick,
     openDocument,
     cancelListening,

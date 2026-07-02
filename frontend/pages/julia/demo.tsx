@@ -38,6 +38,7 @@ export default function JuliaDemoPage() {
         audioSizeMb={demo.debugAudioSizeMb}
         durationSeconds={demo.debugDurationSeconds}
         recording={demo.debugRecording}
+        stageTranscripts={demo.debugStageTranscripts}
       />
     </>
   );

@@ -594,6 +594,43 @@
   text-transform: uppercase;
 }
 
+.juliaDebugHistory {
+  margin-top: 8px;
+}
+
+.juliaDebugHistoryEmpty {
+  color: rgba(255, 255, 255, 0.62);
+}
+
+.juliaDebugHistoryList {
+  list-style: none;
+  margin-top: 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.juliaDebugHistoryItem {
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 6px;
+  padding: 6px 7px;
+}
+
+.juliaDebugHistoryMeta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  color: rgba(255, 255, 255, 0.62);
+  font-size: 10px;
+  text-transform: uppercase;
+}
+
+.juliaDebugHistoryItem pre {
+  margin-top: 4px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
 .juliaDebugTranscript pre {
   margin: 0;
   white-space: pre-wrap;
