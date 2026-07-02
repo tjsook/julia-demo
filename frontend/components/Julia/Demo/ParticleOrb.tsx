@@ -28,6 +28,7 @@ const ALERT_RED: [number, number, number] = [248, 94, 80];
 const LISTENING_WARM_WHITE: [number, number, number] = [255, 245, 220];
 
 const GOLDEN = Math.PI * (3 - Math.sqrt(5));
+const ORB_RADIUS_RATIO = 0.31;
 
 export function ParticleOrb({
   mode,
@@ -121,7 +122,8 @@ export function ParticleOrb({
     canvas.style.height = `${size}px`;
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
-    const radius = size * 0.36;
+    // Keep the orb comfortably inside the canvas so high-noise frames do not get hard-clipped.
+    const radius = size * ORB_RADIUS_RATIO;
     const centerX = size / 2;
     const centerY = size / 2;
     const perspective = 2.7;
@@ -147,10 +149,6 @@ export function ParticleOrb({
       visuals.opacity += (targets.opacity - visuals.opacity) * lerpStrength;
 
       ctx.clearRect(0, 0, size, size);
-      ctx.save();
-      ctx.beginPath();
-      ctx.arc(centerX, centerY, size * 0.495, 0, Math.PI * 2);
-      ctx.clip();
       ctx.globalCompositeOperation = "lighter";
 
       if (currentMode !== "dimmed") {
@@ -202,7 +200,6 @@ export function ParticleOrb({
         ctx.fillRect(screenX, screenY, dotSize, dotSize);
       }
 
-      ctx.restore();
       ctx.globalCompositeOperation = "source-over";
       rafRef.current = window.requestAnimationFrame(renderFrame);
     }
