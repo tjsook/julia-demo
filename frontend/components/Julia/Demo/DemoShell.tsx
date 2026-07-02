@@ -4,7 +4,7 @@ import s from "../../../styles/julia.module.css";
 import { DocumentModal } from "./DocumentModal";
 import { DocumentSelector } from "./DocumentSelector";
 import { ErrorToast } from "./ErrorToast";
-import { JuliaOrb } from "./JuliaOrb";
+import { ParticleOrb } from "./ParticleOrb";
 import { RoiPendingInputToast } from "./RoiPendingInputToast";
 import { RoiReportModal } from "./RoiReportModal";
 
@@ -78,7 +78,19 @@ export function DemoShell({
   return (
     <main className={s.demoMain}>
       <div className={s.demoCenter}>
-        <JuliaOrb state={state} onClick={onOrbClick} />
+        <ParticleOrb
+          mode="idle"
+          onClick={onOrbClick}
+          size={380}
+          className={s.particleOrbButton}
+          disabled={
+            state === "processing" ||
+            state === "showing-document" ||
+            state === "showing-selector" ||
+            state === "showing-roi-report" ||
+            state === "playing-roi-question"
+          }
+        />
         <div className={s.demoStatus}>{isDebugMode ? statusLabel[state] : compactStatusLabel}</div>
         {interactionHint && <div className={s.demoHint}>{interactionHint}</div>}
         {currentQuestionText && (
