@@ -127,13 +127,21 @@
         "customers stiff us on detention",
         "hard to collect detention",
         "we don't enforce detention",
+        "doesn't bill detention",
+        "don't bill detention",
         "drivers stuck at shipper",
         "sitting for hours",
         "lose money to detention",
         "wait time billing",
         "stuck at the customer",
         "free detention",
-        "detention pay"
+        "detention pay",
+        "detention not billed 90% of the time",
+        "detention not getting billed 90% of the time",
+        "90 percent of detention not billed",
+        "no auto-billing",
+        "no auto billing",
+        "no way of doing auto billing"
       ]
     },
     {
@@ -201,9 +209,14 @@
         "putting in loads",
         "adding loads",
         "entering loads",
+        "manual order entry",
+        "manually entering all orders into mcleod",
+        "manually entering all of the orders into mcleod",
         "spending time on each load",
         "seconds per load",
         "minutes per load",
+        "minutes per entry",
+        "three minutes per entry",
         "takes forever to enter",
         "load entry takes forever"
       ]
@@ -244,6 +257,8 @@
         "squeeze more from the fleet",
         "idle trucks",
         "empty miles",
+        "hos violations",
+        "hours of service violations",
         "deadhead",
         "loaded miles",
         "trucks sitting",
