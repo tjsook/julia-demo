@@ -5,6 +5,7 @@ from __future__ import annotations
 import base64
 import json
 import logging
+import re
 import time
 from typing import Annotated
 
@@ -163,8 +164,30 @@ def _synthesize_voice_response(
 def _normalize_company_name(raw_company_name: str | None) -> str | None:
     if raw_company_name is None:
         return None
-    trimmed = raw_company_name.strip()
-    return trimmed or None
+    normalized = raw_company_name.strip()
+    if not normalized:
+        return None
+
+    # Strip common leading disfluencies while preserving actual company tokens.
+    normalized = re.sub(
+        r"^(?:(?:uh+|um+|erm+|ah+|hmm+|mm+|mhm|huh)\s*[,.\-:;]*\s*)+",
+        "",
+        normalized,
+        flags=re.IGNORECASE,
+    )
+
+    # Strip conversational wrappers frequently produced by STT/LLM around the company name.
+    normalized = re.sub(r"^(?:i\s*(?:am|'m)\s+with\s+)", "", normalized, flags=re.IGNORECASE)
+    normalized = re.sub(r"^(?:we\s*(?:are|'re)\s+with\s+)", "", normalized, flags=re.IGNORECASE)
+    normalized = re.sub(r"^(?:this\s+is\s+for\s+)", "", normalized, flags=re.IGNORECASE)
+    normalized = re.sub(r"^(?:for\s+)", "", normalized, flags=re.IGNORECASE)
+    normalized = re.sub(r"\s+(?:here|right)\s*[.?!,;:]*$", "", normalized, flags=re.IGNORECASE)
+
+    # Final punctuation/whitespace cleanup.
+    normalized = re.sub(r"^[\"'`]+|[\"'`]+$", "", normalized)
+    normalized = re.sub(r"[.?!,;:]+$", "", normalized)
+    normalized = re.sub(r"\s+", " ", normalized).strip()
+    return normalized or None
 
 
 def _greeting_name(raw_first_name: str | None) -> str:
