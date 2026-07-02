@@ -147,6 +147,10 @@ export function ParticleOrb({
       visuals.opacity += (targets.opacity - visuals.opacity) * lerpStrength;
 
       ctx.clearRect(0, 0, size, size);
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(centerX, centerY, size * 0.495, 0, Math.PI * 2);
+      ctx.clip();
       ctx.globalCompositeOperation = "lighter";
 
       if (currentMode !== "dimmed") {
@@ -186,13 +190,8 @@ export function ParticleOrb({
         const screenX = centerX + rx * radius * scale;
         const screenY = centerY + ry * radius * scale;
         const depth = clamp01((rz2 + 1.35) / 2.7);
-        const centerDistance = Math.hypot(screenX - centerX, screenY - centerY) / (size * 0.5);
-        const edgeFade = 1 - smoothstep(0.82, 1.03, centerDistance);
-        if (edgeFade <= 0.002) {
-          continue;
-        }
 
-        const alpha = (0.16 + depth * depth * 0.92) * visuals.opacity * edgeFade;
+        const alpha = (0.16 + depth * depth * 0.92) * visuals.opacity;
         const dotSize = (0.6 + depth * depth * 1.6) * visuals.dotScale;
         const warmMix = currentMode === "listening" ? currentAmplitude * 0.45 : 0;
         const warmed = blendColor(point.color, LISTENING_WARM_WHITE, warmMix);
@@ -203,6 +202,7 @@ export function ParticleOrb({
         ctx.fillRect(screenX, screenY, dotSize, dotSize);
       }
 
+      ctx.restore();
       ctx.globalCompositeOperation = "source-over";
       rafRef.current = window.requestAnimationFrame(renderFrame);
     }
@@ -333,14 +333,6 @@ function clamp01(value: number): number {
   if (value < 0) return 0;
   if (value > 1) return 1;
   return value;
-}
-
-function smoothstep(edge0: number, edge1: number, value: number): number {
-  if (edge0 === edge1) {
-    return value < edge0 ? 0 : 1;
-  }
-  const t = clamp01((value - edge0) / (edge1 - edge0));
-  return t * t * (3 - 2 * t);
 }
 
 function blendColor(

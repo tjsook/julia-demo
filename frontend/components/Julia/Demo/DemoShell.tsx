@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import type { MutableRefObject } from "react";
 
 import type { JuliaDemoState } from "../../../hooks/julia/useJuliaDemo";
@@ -69,6 +70,7 @@ export function DemoShell({
   onDismissError,
   onDismissRoiPending,
 }: DemoShellProps) {
+  const [orbSize, setOrbSize] = useState(440);
   const isDebugMode = process.env.NEXT_PUBLIC_JULIA_DEBUG_MODE === "true";
   const interactionHint = isDebugMode ? hintTextForState(state) : null;
   const progressSteps = isDebugMode && roiProgressStep
@@ -87,6 +89,17 @@ export function DemoShell({
   const orbMode =
     errorToast ? "alert" : isDimmed ? "dimmed" : state === "listening" ? "listening" : state === "processing" ? "processing" : "idle";
 
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const updateOrbSize = () => {
+      const maxByViewport = Math.max(300, window.innerWidth - 48);
+      setOrbSize(Math.min(460, maxByViewport));
+    };
+    updateOrbSize();
+    window.addEventListener("resize", updateOrbSize);
+    return () => window.removeEventListener("resize", updateOrbSize);
+  }, []);
+
   return (
     <main className={s.demoMain}>
       <div className={s.demoCenter}>
@@ -95,7 +108,7 @@ export function DemoShell({
           mode={orbMode}
           amplitudeRef={micAmplitudeRef}
           onClick={onOrbClick}
-          size={380}
+          size={orbSize}
           className={s.particleOrbButton}
           disabled={state === "processing" || isDimmed}
         />
