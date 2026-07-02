@@ -18,9 +18,9 @@ from app.schemas.julia_roi_models import (
     JuliaExtractedValue,
     JuliaExtractionVariables,
     JuliaPainPointMatch,
-    JuliaROIFollowupFieldResult,
     JuliaROIExtractionLLMResponse,
     JuliaROIExtractionResult,
+    JuliaROIFollowupFieldResult,
     ROIPendingField,
 )
 

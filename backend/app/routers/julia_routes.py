@@ -24,9 +24,8 @@ from app.schemas.julia_models import (
     JuliaVoicePlaybackResponse,
 )
 from app.schemas.julia_roi_models import (
-    JuliaROICollectionSession,
     JuliaResolvedInput,
-    ROIPendingField,
+    JuliaROICollectionSession,
 )
 from app.services.julia_calibration_service import JuliaCalibrationError, get_calibration
 from app.services.julia_document_service import JuliaDocumentService, JuliaServiceError
