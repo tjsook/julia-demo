@@ -313,14 +313,13 @@ export function useJuliaDemo() {
     if (response.intent === "single_match" && response.matches[0]) {
       resetRoiCollection();
       setCurrentQuestionText(null);
-      setTtsPlayback(
-        playbackFromResponse(response, ["showing-document"], {
-          subtitleText: `Here's the ${response.matches[0].title} document.`,
-        }),
-      );
+      const routePlayback = playbackFromResponse(response, ["showing-document"], {
+        subtitleText: `Here's the ${response.matches[0].title} document.`,
+      });
+      setTtsPlayback(routePlayback);
       void openDocument(response.matches[0], {
-        playConfirmation: false,
-        preservePlayback: true,
+        playConfirmation: routePlayback === null,
+        preservePlayback: routePlayback !== null,
       });
       return;
     }
