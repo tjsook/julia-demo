@@ -238,8 +238,16 @@ export function useJuliaDemo() {
         throw new Error("ROI pending-input response is missing required follow-up fields.");
       }
 
+      const pendingPlayback = playbackFromResponse(
+        response,
+        ["collecting-company-name", "collecting-pain-points", "collecting-roi-field"],
+        { autoStartListeningOnEnd: true },
+      );
+
       setRoiPayload(null);
-      setRoiPendingDetail(formatPendingDetail(pending.detail, pending.question_text ?? null));
+      setRoiPendingDetail(
+        pendingPlayback ? null : formatPendingDetail(pending.detail, pending.question_text ?? null),
+      );
       setCurrentQuestionText(pending.question_text ?? pending.detail);
       setExpectedField(pending.next_field);
       setRoiCollectionSession(pending.session);
@@ -255,11 +263,7 @@ export function useJuliaDemo() {
         setState("collecting-roi-field");
       }
 
-      setTtsPlayback(
-        playbackFromResponse(response, ["collecting-company-name", "collecting-pain-points", "collecting-roi-field"], {
-          autoStartListeningOnEnd: true,
-        }),
-      );
+      setTtsPlayback(pendingPlayback);
       return;
     }
 

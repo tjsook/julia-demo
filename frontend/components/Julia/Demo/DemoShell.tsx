@@ -6,7 +6,7 @@ import s from "../../../styles/julia.module.css";
 import { CaptionsToggle, useCaptionsEnabled } from "./CaptionsToggle";
 import { DocumentModal } from "./DocumentModal";
 import { DocumentSelector } from "./DocumentSelector";
-import { ErrorToast } from "./ErrorToast";
+import { OrbAlertDot } from "./OrbAlertDot";
 import { ParticleOrb } from "./ParticleOrb";
 import { RoiPendingInputToast } from "./RoiPendingInputToast";
 import { RoiReportModal } from "./RoiReportModal";
@@ -161,7 +161,7 @@ export function DemoShell({
         <RoiReportModal payload={roiPayload} onClose={onCloseForeground} />
       )}
 
-      <ErrorToast message={errorToast} onDismiss={onDismissError} />
+      <OrbAlertDot message={errorToast} onDismiss={onDismissError} />
       <RoiPendingInputToast detail={roiPendingDetail} onDismiss={onDismissRoiPending} />
     </main>
   );

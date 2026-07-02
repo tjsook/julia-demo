@@ -461,6 +461,61 @@
   text-align: center;
 }
 
+.orbAlertDot {
+  position: absolute;
+  top: 68px;
+  right: 24px;
+  z-index: 8;
+  display: inline-flex;
+  align-items: center;
+}
+
+.orbAlertDotButton {
+  width: 32px;
+  height: 32px;
+  border: 1px solid rgba(248, 113, 113, 0.58);
+  border-radius: 999px;
+  background: rgba(46, 14, 18, 0.86);
+  color: #fecaca;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  box-shadow: 0 0 0 0 rgba(248, 113, 113, 0.32);
+  animation: orbAlertPulse 1.5s ease-out infinite;
+}
+
+.orbAlertDotCore {
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  background: #ef4444;
+}
+
+.orbAlertTooltip {
+  position: absolute;
+  top: 50%;
+  right: calc(100% + 10px);
+  transform: translateY(-50%);
+  min-width: 180px;
+  max-width: min(360px, calc(100vw - 88px));
+  border: 1px solid rgba(248, 113, 113, 0.46);
+  border-radius: 8px;
+  background: rgba(34, 11, 14, 0.97);
+  color: #fecaca;
+  font-size: 12px;
+  line-height: 1.4;
+  padding: 8px 10px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.15s ease;
+}
+
+.orbAlertDot:hover .orbAlertTooltip,
+.orbAlertDot:focus-within .orbAlertTooltip {
+  opacity: 1;
+}
+
 .particleOrbButton {
   border: 0;
   border-radius: 50%;
@@ -480,6 +535,15 @@
 .particleOrbButton:disabled {
   cursor: default;
   opacity: 0.45;
+}
+
+@keyframes orbAlertPulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(248, 113, 113, 0.35);
+  }
+  100% {
+    box-shadow: 0 0 0 12px rgba(248, 113, 113, 0);
+  }
 }
 
 .demoStatus {
@@ -1236,6 +1300,11 @@
 
   .captionsToggle {
     top: 16px;
+    right: 14px;
+  }
+
+  .orbAlertDot {
+    top: 58px;
     right: 14px;
   }
 
