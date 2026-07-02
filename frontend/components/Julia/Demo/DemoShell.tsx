@@ -78,13 +78,6 @@ export function DemoShell({
   const [orbSize, setOrbSize] = useState(440);
   const isDebugMode = process.env.NEXT_PUBLIC_JULIA_DEBUG_MODE === "true";
   const interactionHint = isDebugMode ? hintTextForState(state) : null;
-  const progressSteps = isDebugMode && roiProgressStep
-    ? buildProgressSteps({
-        current: roiProgressStep,
-        requiredNumericCount,
-        collectedNumericCount,
-      })
-    : [];
   const isDimmed =
     state === "showing-document" ||
     state === "showing-selector" ||
@@ -155,27 +148,6 @@ export function DemoShell({
             </div>
           </section>
         )}
-        {progressSteps.length > 0 && (
-          <section className={s.roiProgress} aria-label="ROI progress">
-            <div className={s.roiProgressTitle}>ROI progress</div>
-            <ol className={s.roiProgressList}>
-              {progressSteps.map((step) => (
-                <li
-                  key={step.id}
-                  className={
-                    step.status === "done"
-                      ? s.roiProgressDone
-                      : step.status === "active"
-                        ? s.roiProgressActive
-                        : s.roiProgressUpcoming
-                  }
-                >
-                  <span>{step.label}</span>
-                </li>
-              ))}
-            </ol>
-          </section>
-        )}
       </div>
 
       {state === "showing-document" && (
@@ -224,42 +196,6 @@ function hintTextForState(state: JuliaDemoState): string | null {
     return "Processing your answer...";
   }
   return null;
-}
-
-function buildProgressSteps({
-  current,
-  requiredNumericCount,
-  collectedNumericCount,
-}: {
-  current: "company" | "pain_points" | "numeric_fields" | "complete";
-  requiredNumericCount: number;
-  collectedNumericCount: number;
-}): Array<{
-  id: "company" | "pain_points" | "numeric_fields" | "complete";
-  label: string;
-  status: "done" | "active" | "upcoming";
-}> {
-  const ordered: Array<"company" | "pain_points" | "numeric_fields" | "complete"> = [
-    "company",
-    "pain_points",
-    "numeric_fields",
-    "complete",
-  ];
-  const labels: Record<string, string> = {
-    company: "Company",
-    pain_points: "Pain points",
-    numeric_fields:
-      requiredNumericCount > 0
-        ? `Inputs (${Math.min(collectedNumericCount, requiredNumericCount)}/${requiredNumericCount})`
-        : "Inputs",
-    complete: "Report",
-  };
-  const currentIndex = ordered.indexOf(current);
-  return ordered.map((id, index) => ({
-    id,
-    label: labels[id],
-    status: index < currentIndex ? "done" : index === currentIndex ? "active" : "upcoming",
-  }));
 }
 
 function buildShowConsoleLines({
