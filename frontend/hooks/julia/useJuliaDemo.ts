@@ -51,6 +51,12 @@ type GuidedConversationStage =
 
 type RoiProgressStep = "company" | "pain_points" | "numeric_fields" | "complete" | null;
 
+export type JuliaTerminalRecognizedLine = {
+  key: string;
+  prefix: string;
+  message: string;
+};
+
 export type JuliaDebugStageTranscript = {
   id: number;
   stage: GuidedConversationStage | "error";
@@ -108,6 +114,7 @@ export function useJuliaDemo() {
   const [roiPendingDetail, setRoiPendingDetail] = useState<string | null>(null);
   const [roiCollectionSession, setRoiCollectionSession] =
     useState<JuliaROICollectionSession | null>(null);
+  const [terminalRecognizedLines, setTerminalRecognizedLines] = useState<JuliaTerminalRecognizedLine[]>([]);
   const [currentQuestionText, setCurrentQuestionText] = useState<string | null>(null);
   const [startupTimingMarks, setStartupTimingMarks] = useState<JuliaStartupTimingMark[]>([]);
   const [debugStageTranscripts, setDebugStageTranscripts] = useState<JuliaDebugStageTranscript[]>([]);
@@ -195,6 +202,7 @@ export function useJuliaDemo() {
     setExpectedField(null);
     setRoiCollectionSession(null);
     setRoiPendingDetail(null);
+    setTerminalRecognizedLines([]);
   }, []);
 
   const appendDebugStageTranscript = useCallback(
@@ -271,6 +279,10 @@ export function useJuliaDemo() {
         throw new Error("ROI analysis response is missing roi_payload.");
       }
       setRoiPayload(response.roi_payload);
+      setTerminalRecognizedLines(buildRecognizedTerminalLines({
+        session: null,
+        payload: response.roi_payload,
+      }));
       setTtsPlayback(playbackFromResponse(response, ["showing-roi-report"], { subtitleText: null }));
       setConversationStage("complete");
       setExpectedField(null);
@@ -302,6 +314,10 @@ export function useJuliaDemo() {
       setCurrentQuestionText(pending.question_text ?? pending.detail);
       setExpectedField(pending.next_field);
       setRoiCollectionSession(pending.session);
+      setTerminalRecognizedLines(buildRecognizedTerminalLines({
+        session: pending.session,
+        payload: null,
+      }));
 
       if (pending.next_field === "company_name") {
         setConversationStage("company");
@@ -719,6 +735,7 @@ export function useJuliaDemo() {
     roiPayload,
     roiPendingDetail,
     roiCollectionSession,
+    terminalRecognizedLines,
     currentQuestionText,
     activeSubtitleText,
     showProcessingSplash: state === "processing" && activeSubtitleText === null,
@@ -807,4 +824,72 @@ function audioUrlFromBase64(base64Audio: string, mimeType: string): string {
     bytes[idx] = binary.charCodeAt(idx);
   }
   return URL.createObjectURL(new Blob([bytes], { type: mimeType }));
+}
+
+function buildRecognizedTerminalLines({
+  session,
+  payload,
+}: {
+  session: JuliaROICollectionSession | null;
+  payload: JuliaROIAnalysisPayload | null;
+}): JuliaTerminalRecognizedLine[] {
+  const lines: JuliaTerminalRecognizedLine[] = [];
+  const companyName = payload?.company_name ?? session?.company_name ?? null;
+  if (companyName) {
+    lines.push({
+      key: "company",
+      prefix: "[id  ]",
+      message: `company=${companyName}`,
+    });
+  }
+
+  const painPoints = payload?.matched_pain_points ?? session?.matched_pain_points ?? [];
+  for (const painPoint of painPoints) {
+    lines.push({
+      key: `pain:${painPoint.id}`,
+      prefix: "[pain]",
+      message: `${painPoint.id} conf=${formatConfidence(painPoint.confidence)}`,
+    });
+  }
+
+  const inputs = payload?.inputs ?? session?.resolved_inputs ?? {};
+  for (const field of ROI_INPUT_FIELD_ORDER) {
+    const input = inputs[field];
+    if (!input) continue;
+    lines.push({
+      key: `input:${field}`,
+      prefix: input.source === "user_approved_default" || input.source === "default" ? "[def ]" : "[num ]",
+      message: `${field}=${formatInputValue(field, input.value)} source=${input.source}`,
+    });
+  }
+
+  return lines;
+}
+
+const ROI_INPUT_FIELD_ORDER: Array<keyof JuliaROIAnalysisPayload["inputs"]> = [
+  "T",
+  "Ld",
+  "S",
+  "Du",
+  "P",
+  "R",
+  "minutes_per_order",
+];
+
+function formatInputValue(field: keyof JuliaROIAnalysisPayload["inputs"], value: number): string {
+  if (field === "T") return `${Math.round(value)} trucks`;
+  if (field === "Ld") return `${formatCompactNumber(value)}/day`;
+  if (field === "S" || field === "Du") return `${(value * 100).toFixed(1).replace(/\.0$/, "")}%`;
+  if (field === "P") return `${Math.round(value)} staff`;
+  if (field === "R") return `$${formatCompactNumber(value)}/load`;
+  if (field === "minutes_per_order") return `${formatCompactNumber(value)} min/order`;
+  return formatCompactNumber(value);
+}
+
+function formatCompactNumber(value: number): string {
+  return value.toLocaleString(undefined, { maximumFractionDigits: 2 });
+}
+
+function formatConfidence(value: number): string {
+  return value.toFixed(2);
 }

@@ -482,48 +482,75 @@
 }
 
 .demoConsole {
+  position: relative;
   width: min(760px, calc(100vw - 64px));
-  border: 1px solid rgba(255, 255, 255, 0.15);
+  border: 1px solid rgba(245, 197, 24, 0.2);
   border-radius: 10px;
-  background: rgba(5, 7, 11, 0.66);
-  box-shadow: 0 10px 34px rgba(0, 0, 0, 0.28);
+  background:
+    radial-gradient(circle at 12% -20%, rgba(245, 197, 24, 0.1), transparent 42%),
+    rgba(4, 7, 12, 0.78);
+  box-shadow: 0 14px 44px rgba(0, 0, 0, 0.36);
   overflow: hidden;
 }
 
+.demoConsole::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    linear-gradient(rgba(245, 197, 24, 0.05) 1px, transparent 1px) 0 0 / 100% 22px,
+    linear-gradient(90deg, rgba(245, 197, 24, 0.025) 1px, transparent 1px) 0 0 / 24px 100%;
+  opacity: 0.33;
+}
+
 .demoConsoleHeader {
+  position: relative;
   min-height: 32px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.11);
-  background: rgba(255, 255, 255, 0.04);
-  color: rgba(245, 197, 24, 0.78);
+  border-bottom: 1px solid rgba(245, 197, 24, 0.22);
+  background: rgba(10, 14, 20, 0.9);
+  color: rgba(245, 197, 24, 0.88);
   font-family: "SFMono-Regular", Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
   font-size: 11px;
   font-weight: 760;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.12em;
   display: flex;
   align-items: center;
   padding: 0 12px;
 }
 
 .demoConsoleBody {
+  position: relative;
+  min-height: 118px;
   display: flex;
   flex-direction: column;
   gap: 6px;
   padding: 10px 12px 12px;
 }
 
+.demoConsoleBody::after {
+  content: "▋";
+  position: absolute;
+  right: 12px;
+  bottom: 10px;
+  color: rgba(245, 197, 24, 0.7);
+  font-size: 11px;
+  animation: consoleCursorBlink 1s steps(1, end) infinite;
+}
+
 .demoConsoleLine {
   min-height: 18px;
-  color: rgba(255, 255, 255, 0.84);
+  color: rgba(229, 237, 245, 0.9);
   font-family: "SFMono-Regular", Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
-  font-size: 12px;
-  line-height: 1.45;
+  font-size: 11.5px;
+  line-height: 1.42;
   display: grid;
   grid-template-columns: 56px minmax(0, 1fr);
   gap: 8px;
 }
 
 .demoConsolePrefix {
-  color: rgba(245, 197, 24, 0.82);
+  color: rgba(245, 197, 24, 0.9);
   font-weight: 700;
 }
 
@@ -609,6 +636,17 @@
   }
   100% {
     box-shadow: 0 0 0 12px rgba(248, 113, 113, 0);
+  }
+}
+
+@keyframes consoleCursorBlink {
+  0%,
+  49% {
+    opacity: 1;
+  }
+  50%,
+  100% {
+    opacity: 0.2;
   }
 }
 

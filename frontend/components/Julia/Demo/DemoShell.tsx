@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import type { MutableRefObject } from "react";
 
-import type { JuliaDemoState } from "../../../hooks/julia/useJuliaDemo";
+import type { JuliaDemoState, JuliaTerminalRecognizedLine } from "../../../hooks/julia/useJuliaDemo";
 import type { JuliaROIAnalysisPayload, JuliaVoiceMatch } from "../../../lib/julia/types";
 import s from "../../../styles/julia.module.css";
 import { DocumentModal } from "./DocumentModal";
@@ -23,6 +23,7 @@ type DemoShellProps = {
   roiPendingDetail: string | null;
   micAmplitudeRef: MutableRefObject<number>;
   isStartupLocked: boolean;
+  terminalRecognizedLines: JuliaTerminalRecognizedLine[];
   currentQuestionText: string | null;
   activeSubtitleText: string | null;
   showProcessingSplash: boolean;
@@ -64,6 +65,7 @@ export function DemoShell({
   roiPendingDetail,
   micAmplitudeRef,
   isStartupLocked,
+  terminalRecognizedLines,
   currentQuestionText,
   activeSubtitleText,
   showProcessingSplash,
@@ -97,6 +99,7 @@ export function DemoShell({
         roiProgressStep,
         requiredNumericCount,
         collectedNumericCount,
+        terminalRecognizedLines,
         currentQuestionText,
         roiPendingDetail,
         errorToast,
@@ -208,6 +211,7 @@ function buildShowConsoleLines({
   roiProgressStep,
   requiredNumericCount,
   collectedNumericCount,
+  terminalRecognizedLines,
   currentQuestionText,
   roiPendingDetail,
   errorToast,
@@ -219,6 +223,7 @@ function buildShowConsoleLines({
   roiProgressStep: "company" | "pain_points" | "numeric_fields" | "complete" | null;
   requiredNumericCount: number;
   collectedNumericCount: number;
+  terminalRecognizedLines: JuliaTerminalRecognizedLine[];
   currentQuestionText: string | null;
   roiPendingDetail: string | null;
   errorToast: string | null;
@@ -232,6 +237,7 @@ function buildShowConsoleLines({
       : "n/a";
     lines.push({ prefix: "[roi ]", message: `phase=${roiProgressStep} fields=${numericSummary}` });
   }
+  lines.push(...terminalRecognizedLines.map((line) => ({ prefix: line.prefix, message: line.message })));
   if (showProcessingSplash) {
     lines.push({ prefix: "[proc]", message: processingSplashLine });
   }
@@ -248,7 +254,7 @@ function buildShowConsoleLines({
   if (errorToast) {
     lines.push({ prefix: "[error]", message: compactConsoleText(errorToast) });
   }
-  return lines.slice(0, 6);
+  return lines.slice(0, 9);
 }
 
 function compactConsoleText(value: string): string {

@@ -24,6 +24,7 @@ export default function JuliaDemoPage() {
         roiPendingDetail={demo.roiPendingDetail}
         micAmplitudeRef={demo.micAmplitudeRef}
         isStartupLocked={demo.isStartupLocked}
+        terminalRecognizedLines={demo.terminalRecognizedLines}
         currentQuestionText={demo.currentQuestionText}
         activeSubtitleText={demo.activeSubtitleText}
         showProcessingSplash={demo.showProcessingSplash}
