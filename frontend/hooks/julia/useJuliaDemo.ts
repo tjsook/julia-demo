@@ -59,11 +59,18 @@ export type JuliaDebugStageTranscript = {
   intent: string | null;
 };
 
+export type JuliaStartupTimingMark = {
+  event: string;
+  elapsedMs: number;
+};
+
 type JuliaTtsPlayback = {
   audioBase64: string;
   mimeType: string;
   playIn: JuliaDemoState[];
   autoStartListeningOnEnd?: boolean;
+  source?: "greeting" | "general";
+  subtitleText?: string | null;
 };
 
 type OpenDocumentOptions = {
@@ -71,8 +78,17 @@ type OpenDocumentOptions = {
   preservePlayback?: boolean;
 };
 
+const GREETING_PLAYBACK_CACHE = new Map<string, JuliaVoicePlaybackResponse>();
+const PROCESSING_SPLASH_LINES = [
+  "syncing transcript",
+  "matching pain signals",
+  "resolving required fields",
+  "building ROI model",
+] as const;
+
 export function useJuliaDemo() {
   const { name, email } = useCurrentUser();
+  const isDebugMode = process.env.NEXT_PUBLIC_JULIA_DEBUG_MODE === "true";
   const [state, setState] = useState<JuliaDemoState>("asking-initial-intent");
   const [conversationStage, setConversationStage] =
     useState<GuidedConversationStage>("initial_intent");
@@ -82,6 +98,8 @@ export function useJuliaDemo() {
   const [selectorMatches, setSelectorMatches] = useState<JuliaVoiceMatch[]>([]);
   const [lastVoiceResponse, setLastVoiceResponse] = useState<JuliaVoiceIntentResponse | null>(null);
   const [ttsPlayback, setTtsPlayback] = useState<JuliaTtsPlayback | null>(null);
+  const [activeSubtitleText, setActiveSubtitleText] = useState<string | null>(null);
+  const [processingSplashIndex, setProcessingSplashIndex] = useState(0);
   const [documentUrl, setDocumentUrl] = useState<string | null>(null);
   const [documentLoading, setDocumentLoading] = useState(false);
   const [documentError, setDocumentError] = useState<string | null>(null);
@@ -90,8 +108,10 @@ export function useJuliaDemo() {
   const [roiCollectionSession, setRoiCollectionSession] =
     useState<JuliaROICollectionSession | null>(null);
   const [currentQuestionText, setCurrentQuestionText] = useState<string | null>(null);
+  const [startupTimingMarks, setStartupTimingMarks] = useState<JuliaStartupTimingMark[]>([]);
   const [debugStageTranscripts, setDebugStageTranscripts] = useState<JuliaDebugStageTranscript[]>([]);
   const debugEntryIdRef = useRef(0);
+  const startupEpochMsRef = useRef<number | null>(null);
   const confirmationRequestRef = useRef(0);
   const hasPlayedGreetingRef = useRef(false);
   const micAmplitudeRef = useRef(0);
@@ -108,6 +128,23 @@ export function useJuliaDemo() {
     return firstToken;
   }, [email, name]);
 
+  const recordStartupTiming = useCallback((event: string) => {
+    if (typeof window === "undefined") return;
+    const now = window.performance.now();
+    if (startupEpochMsRef.current === null) {
+      startupEpochMsRef.current = now;
+    }
+    const elapsedMs = Math.round(now - startupEpochMsRef.current);
+    setStartupTimingMarks((current) => [...current, { event, elapsedMs }].slice(-20));
+    if (isDebugMode) {
+      console.log("julia.startup_timing", {
+        event: "julia.startup_timing",
+        startup_event: event,
+        elapsed_ms: elapsedMs,
+      });
+    }
+  }, [isDebugMode]);
+
   const queueSelectedDocumentConfirmation = useCallback(async (match: JuliaVoiceMatch) => {
     const requestId = confirmationRequestRef.current + 1;
     confirmationRequestRef.current = requestId;
@@ -115,7 +152,11 @@ export function useJuliaDemo() {
     try {
       const response = await postJuliaVoiceDocumentConfirmation(match.id);
       if (confirmationRequestRef.current !== requestId) return;
-      setTtsPlayback(playbackFromResponse(response, ["showing-document"]));
+      setTtsPlayback(
+        playbackFromResponse(response, ["showing-document"], {
+          subtitleText: `Here's the ${match.title} document.`,
+        }),
+      );
     } catch (err) {
       console.log("julia.tts.selection_failed", {
         event: "julia.tts.selection_failed",
@@ -229,7 +270,7 @@ export function useJuliaDemo() {
         throw new Error("ROI analysis response is missing roi_payload.");
       }
       setRoiPayload(response.roi_payload);
-      setTtsPlayback(playbackFromResponse(response, ["showing-roi-report"]));
+      setTtsPlayback(playbackFromResponse(response, ["showing-roi-report"], { subtitleText: null }));
       setConversationStage("complete");
       setExpectedField(null);
       setRoiCollectionSession(null);
@@ -247,7 +288,10 @@ export function useJuliaDemo() {
       const pendingPlayback = playbackFromResponse(
         response,
         ["collecting-company-name", "collecting-pain-points", "collecting-roi-field"],
-        { autoStartListeningOnEnd: true },
+        {
+          autoStartListeningOnEnd: true,
+          subtitleText: pending.question_text ?? pending.detail,
+        },
       );
 
       setRoiPayload(null);
@@ -276,10 +320,13 @@ export function useJuliaDemo() {
     if (response.intent === "single_match" && response.matches[0]) {
       resetRoiCollection();
       setCurrentQuestionText(null);
-      setTtsPlayback(playbackFromResponse(response, ["showing-document"]));
+      const routePlayback = playbackFromResponse(response, ["showing-document"], {
+        subtitleText: `Here's the ${response.matches[0].title} document.`,
+      });
+      setTtsPlayback(routePlayback);
       void openDocument(response.matches[0], {
-        playConfirmation: false,
-        preservePlayback: true,
+        playConfirmation: routePlayback === null,
+        preservePlayback: routePlayback !== null,
       });
       return;
     }
@@ -287,7 +334,11 @@ export function useJuliaDemo() {
     if (response.intent === "multi_match") {
       resetRoiCollection();
       setCurrentQuestionText(null);
-      setTtsPlayback(playbackFromResponse(response, ["showing-selector"]));
+      setTtsPlayback(
+        playbackFromResponse(response, ["showing-selector"], {
+          subtitleText: "I found multiple documents of that type. Which one do you want me to pull up?",
+        }),
+      );
       setSelectorMatches(response.matches);
       setState("showing-selector");
       return;
@@ -296,7 +347,11 @@ export function useJuliaDemo() {
     if (response.intent === "no_match") {
       resetRoiCollection();
       setCurrentQuestionText(null);
-      setTtsPlayback(playbackFromResponse(response, ["idle"]));
+      setTtsPlayback(
+        playbackFromResponse(response, ["idle"], {
+          subtitleText: "I could not find that. Narrow down your query.",
+        }),
+      );
       setState("idle");
       return;
     }
@@ -319,14 +374,19 @@ export function useJuliaDemo() {
     setState("idle");
   }, [appendDebugStageTranscript, expectedField]);
 
-  const voice = useJuliaVoice({
+  const {
+    startListening,
+    stopAndSubmit,
+    cancelListening: cancelVoiceListening,
+    debugSnapshot,
+  } = useJuliaVoice({
     onIntent: handleIntent,
     onError: handleError,
     onAmplitude: useCallback((level: number) => {
       micAmplitudeRef.current = level;
     }, []),
   });
-  const debugSnapshot: JuliaVoiceDebugSnapshot = voice.debugSnapshot;
+  const typedDebugSnapshot: JuliaVoiceDebugSnapshot = debugSnapshot;
 
   const submitFollowup: JuliaVoiceSubmitter = useCallback(async (recording) => {
     if (!expectedField) {
@@ -348,19 +408,19 @@ export function useJuliaDemo() {
       state === "roi-pending-input"
     ) {
       setState("listening");
-      void voice.startListening();
+      void startListening();
       return;
     }
 
     if (state === "listening") {
       setState("processing");
       const submitter = conversationStage === "initial_intent" ? undefined : submitFollowup;
-      void voice.stopAndSubmit(submitter);
+      void stopAndSubmit(submitter);
     }
-  }, [conversationStage, state, submitFollowup, voice]);
+  }, [conversationStage, startListening, state, stopAndSubmit, submitFollowup]);
 
   const cancelListening = useCallback(() => {
-    voice.cancelListening();
+    cancelVoiceListening();
     if (conversationStage === "company") {
       setState("collecting-company-name");
       return;
@@ -374,7 +434,7 @@ export function useJuliaDemo() {
       return;
     }
     setState("idle");
-  }, [conversationStage, voice]);
+  }, [cancelVoiceListening, conversationStage]);
 
   const closeForeground = useCallback(() => {
     confirmationRequestRef.current += 1;
@@ -394,6 +454,7 @@ export function useJuliaDemo() {
   }, [resetRoiCollection]);
 
   useEffect(() => {
+    recordStartupTiming("page_mount");
     if (hasPlayedGreetingRef.current) {
       return;
     }
@@ -404,9 +465,22 @@ export function useJuliaDemo() {
 
     void (async () => {
       try {
-        const response = await postJuliaVoiceGreeting(spokenName);
+        const cacheKey = spokenName.trim().toLowerCase();
+        const cached = GREETING_PLAYBACK_CACHE.get(cacheKey);
+        let response: JuliaVoicePlaybackResponse;
+        if (cached) {
+          response = cached;
+          recordStartupTiming("greeting_cache_hit");
+        } else {
+          recordStartupTiming("greeting_request_start");
+          response = await postJuliaVoiceGreeting(spokenName);
+          recordStartupTiming("greeting_response_received");
+          GREETING_PLAYBACK_CACHE.set(cacheKey, response);
+        }
         const greetingPlayback = playbackFromResponse(response, ["asking-initial-intent"], {
           autoStartListeningOnEnd: true,
+          source: "greeting",
+          subtitleText: greetingText,
         });
         if (!greetingPlayback) {
           setErrorToast("Julia couldn't play the greeting audio. Click the orb to start.");
@@ -417,7 +491,18 @@ export function useJuliaDemo() {
         setErrorToast(err instanceof Error ? err.message : "Failed to load Julia greeting.");
       }
     })();
-  }, [spokenName]);
+  }, [recordStartupTiming, spokenName]);
+
+  useEffect(() => {
+    if (state !== "processing") {
+      setProcessingSplashIndex(0);
+      return;
+    }
+    const intervalId = window.setInterval(() => {
+      setProcessingSplashIndex((current) => (current + 1) % PROCESSING_SPLASH_LINES.length);
+    }, 1100);
+    return () => window.clearInterval(intervalId);
+  }, [state]);
 
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
@@ -457,16 +542,32 @@ export function useJuliaDemo() {
 
     const audioUrl = audioUrlFromBase64(ttsPlayback.audioBase64, ttsPlayback.mimeType);
     const audio = new Audio(audioUrl);
+    setActiveSubtitleText(ttsPlayback.subtitleText ?? null);
+    if (ttsPlayback.source === "greeting") {
+      recordStartupTiming("greeting_audio_play_start");
+    }
     activeTtsAudioRef.current = audio;
     audio.onended = () => {
       if (activeTtsAudioRef.current === audio) {
         activeTtsAudioRef.current = null;
       }
+      if (ttsPlayback.source === "greeting") {
+        recordStartupTiming("greeting_audio_play_end");
+      }
+      setActiveSubtitleText(null);
       if (!ttsPlayback.autoStartListeningOnEnd) {
         return;
       }
+      if (ttsPlayback.source === "greeting") {
+        recordStartupTiming("mic_auto_start_request");
+      }
       setState("listening");
-      void voice.startListening();
+      void (async () => {
+        await startListening();
+        if (ttsPlayback.source === "greeting") {
+          recordStartupTiming("mic_ready_listening");
+        }
+      })();
     };
     audio.play().catch((err: unknown) => {
       if (activeTtsAudioRef.current === audio) {
@@ -476,6 +577,7 @@ export function useJuliaDemo() {
         event: "julia.tts.play_failed",
         error: err instanceof Error ? err.message : "Audio playback failed.",
       });
+      setActiveSubtitleText(null);
       setErrorToast("Julia couldn't play that prompt. Click the orb to continue.");
     });
 
@@ -483,11 +585,12 @@ export function useJuliaDemo() {
       if (activeTtsAudioRef.current === audio) {
         activeTtsAudioRef.current = null;
       }
+      setActiveSubtitleText(null);
       audio.onended = null;
       audio.pause();
       URL.revokeObjectURL(audioUrl);
     };
-  }, [state, ttsPlayback, voice]);
+  }, [recordStartupTiming, startListening, state, ttsPlayback]);
 
   useEffect(() => {
     if (state === "processing") {
@@ -588,6 +691,7 @@ export function useJuliaDemo() {
         activeTtsAudioRef.current.pause();
         activeTtsAudioRef.current = null;
       }
+      setActiveSubtitleText(null);
     };
   }, []);
 
@@ -604,15 +708,19 @@ export function useJuliaDemo() {
     roiPendingDetail,
     roiCollectionSession,
     currentQuestionText,
+    activeSubtitleText,
+    showProcessingSplash: state === "processing" && activeSubtitleText === null,
+    processingSplashLine: PROCESSING_SPLASH_LINES[processingSplashIndex],
     roiProgressStep,
     requiredNumericCount: requiredNumericFields.length,
     collectedNumericCount,
-    debugTranscript: debugSnapshot.transcript,
-    debugStopReason: debugSnapshot.stopReason,
-    debugAudioSizeMb: debugSnapshot.audioSizeMb,
-    debugDurationSeconds: debugSnapshot.durationSeconds,
-    debugRecording: debugSnapshot.recording,
+    debugTranscript: typedDebugSnapshot.transcript,
+    debugStopReason: typedDebugSnapshot.stopReason,
+    debugAudioSizeMb: typedDebugSnapshot.audioSizeMb,
+    debugDurationSeconds: typedDebugSnapshot.durationSeconds,
+    debugRecording: typedDebugSnapshot.recording,
     micAmplitudeRef,
+    startupTimingMarks,
     debugStageTranscripts,
     handleOrbClick,
     openDocument,
@@ -662,7 +770,11 @@ function formatPendingDetail(detail: string, questionText: string | null): strin
 function playbackFromResponse(
   response: JuliaVoiceIntentResponse | JuliaVoicePlaybackResponse,
   playIn: JuliaDemoState[],
-  options: { autoStartListeningOnEnd?: boolean } = {},
+  options: {
+    autoStartListeningOnEnd?: boolean;
+    source?: "greeting" | "general";
+    subtitleText?: string | null;
+  } = {},
 ): JuliaTtsPlayback | null {
   if (!response.tts_audio_base64 || !response.tts_mime_type) return null;
   return {
@@ -670,6 +782,8 @@ function playbackFromResponse(
     mimeType: response.tts_mime_type,
     playIn,
     autoStartListeningOnEnd: options.autoStartListeningOnEnd,
+    source: options.source ?? "general",
+    subtitleText: options.subtitleText ?? null,
   };
 }
 

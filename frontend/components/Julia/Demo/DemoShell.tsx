@@ -4,7 +4,6 @@ import type { MutableRefObject } from "react";
 import type { JuliaDemoState } from "../../../hooks/julia/useJuliaDemo";
 import type { JuliaROIAnalysisPayload, JuliaVoiceMatch } from "../../../lib/julia/types";
 import s from "../../../styles/julia.module.css";
-import { CaptionsToggle, useCaptionsEnabled } from "./CaptionsToggle";
 import { DocumentModal } from "./DocumentModal";
 import { DocumentSelector } from "./DocumentSelector";
 import { OrbAlertDot } from "./OrbAlertDot";
@@ -24,6 +23,9 @@ type DemoShellProps = {
   roiPendingDetail: string | null;
   micAmplitudeRef: MutableRefObject<number>;
   currentQuestionText: string | null;
+  activeSubtitleText: string | null;
+  showProcessingSplash: boolean;
+  processingSplashLine: string;
   roiProgressStep: "company" | "pain_points" | "numeric_fields" | "complete" | null;
   requiredNumericCount: number;
   collectedNumericCount: number;
@@ -61,6 +63,9 @@ export function DemoShell({
   roiPendingDetail,
   micAmplitudeRef,
   currentQuestionText,
+  activeSubtitleText,
+  showProcessingSplash,
+  processingSplashLine,
   roiProgressStep,
   requiredNumericCount,
   collectedNumericCount,
@@ -73,14 +78,6 @@ export function DemoShell({
   const [orbSize, setOrbSize] = useState(440);
   const isDebugMode = process.env.NEXT_PUBLIC_JULIA_DEBUG_MODE === "true";
   const interactionHint = isDebugMode ? hintTextForState(state) : null;
-  const progressSteps = isDebugMode && roiProgressStep
-    ? buildProgressSteps({
-        current: roiProgressStep,
-        requiredNumericCount,
-        collectedNumericCount,
-      })
-    : [];
-  const [captionsEnabled, toggleCaptions] = useCaptionsEnabled();
   const isDimmed =
     state === "showing-document" ||
     state === "showing-selector" ||
@@ -88,6 +85,21 @@ export function DemoShell({
     state === "playing-roi-question";
   const orbMode =
     errorToast ? "alert" : isDimmed ? "dimmed" : state === "listening" ? "listening" : state === "processing" ? "processing" : "idle";
+  const showConsole = !isDimmed;
+  const consoleLines = showConsole
+    ? buildShowConsoleLines({
+        state,
+        activeSubtitleText,
+        showProcessingSplash,
+        processingSplashLine,
+        roiProgressStep,
+        requiredNumericCount,
+        collectedNumericCount,
+        currentQuestionText,
+        roiPendingDetail,
+        errorToast,
+      })
+    : [];
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -103,7 +115,6 @@ export function DemoShell({
   return (
     <main className={s.demoMain}>
       <div className={s.demoCenter}>
-        {!isDebugMode && <CaptionsToggle enabled={captionsEnabled} onToggle={toggleCaptions} />}
         <ParticleOrb
           mode={orbMode}
           amplitudeRef={micAmplitudeRef}
@@ -112,42 +123,29 @@ export function DemoShell({
           className={s.particleOrbButton}
           disabled={state === "processing" || isDimmed}
         />
-        {isDebugMode && <div className={s.demoStatus}>{statusLabel[state]}</div>}
-        {interactionHint && <div className={s.demoHint}>{interactionHint}</div>}
-        {currentQuestionText && !captionsEnabled && (
+        {isDebugMode && !showConsole && <div className={s.demoStatus}>{statusLabel[state]}</div>}
+        {interactionHint && !showConsole && <div className={s.demoHint}>{interactionHint}</div>}
+        {currentQuestionText && (
           <div className={s.screenReaderOnly} role="status" aria-live="polite">
             {currentQuestionText}
           </div>
         )}
-        {currentQuestionText && isDebugMode && (
+        {currentQuestionText && isDebugMode && !showConsole && (
           <div className={s.demoQuestion} aria-hidden="true">
             {currentQuestionText}
           </div>
         )}
-        {!isDebugMode && captionsEnabled && currentQuestionText && (
-          <div className={s.captionsLine} role="status" aria-live="polite">
-            {currentQuestionText}
-          </div>
-        )}
-        {progressSteps.length > 0 && (
-          <section className={s.roiProgress} aria-label="ROI progress">
-            <div className={s.roiProgressTitle}>ROI progress</div>
-            <ol className={s.roiProgressList}>
-              {progressSteps.map((step) => (
-                <li
-                  key={step.id}
-                  className={
-                    step.status === "done"
-                      ? s.roiProgressDone
-                      : step.status === "active"
-                        ? s.roiProgressActive
-                        : s.roiProgressUpcoming
-                  }
-                >
-                  <span>{step.label}</span>
-                </li>
+        {showConsole && (
+          <section className={s.demoConsole} aria-hidden="true">
+            <div className={s.demoConsoleHeader}>JULIA::CONSOLE</div>
+            <div className={s.demoConsoleBody}>
+              {consoleLines.map((line, index) => (
+                <div key={`${line.prefix}-${index}`} className={s.demoConsoleLine}>
+                  <span className={s.demoConsolePrefix}>{line.prefix}</span>
+                  <span>{line.message}</span>
+                </div>
               ))}
-            </ol>
+            </div>
           </section>
         )}
       </div>
@@ -175,7 +173,9 @@ export function DemoShell({
       )}
 
       <OrbAlertDot message={errorToast} onDismiss={onDismissError} />
-      <RoiPendingInputToast detail={roiPendingDetail} onDismiss={onDismissRoiPending} />
+      {isDebugMode && (
+        <RoiPendingInputToast detail={roiPendingDetail} onDismiss={onDismissRoiPending} />
+      )}
     </main>
   );
 }
@@ -198,38 +198,77 @@ function hintTextForState(state: JuliaDemoState): string | null {
   return null;
 }
 
-function buildProgressSteps({
-  current,
+function buildShowConsoleLines({
+  state,
+  activeSubtitleText,
+  showProcessingSplash,
+  processingSplashLine,
+  roiProgressStep,
   requiredNumericCount,
   collectedNumericCount,
+  currentQuestionText,
+  roiPendingDetail,
+  errorToast,
 }: {
-  current: "company" | "pain_points" | "numeric_fields" | "complete";
+  state: JuliaDemoState;
+  activeSubtitleText: string | null;
+  showProcessingSplash: boolean;
+  processingSplashLine: string;
+  roiProgressStep: "company" | "pain_points" | "numeric_fields" | "complete" | null;
   requiredNumericCount: number;
   collectedNumericCount: number;
-}): Array<{
-  id: "company" | "pain_points" | "numeric_fields" | "complete";
-  label: string;
-  status: "done" | "active" | "upcoming";
-}> {
-  const ordered: Array<"company" | "pain_points" | "numeric_fields" | "complete"> = [
-    "company",
-    "pain_points",
-    "numeric_fields",
-    "complete",
+  currentQuestionText: string | null;
+  roiPendingDetail: string | null;
+  errorToast: string | null;
+}): Array<{ prefix: string; message: string }> {
+  const lines: Array<{ prefix: string; message: string }> = [
+    { prefix: "[core]", message: `state=${stateToConsoleMode(state)}` },
   ];
-  const labels: Record<string, string> = {
-    company: "Company",
-    pain_points: "Pain points",
-    numeric_fields:
-      requiredNumericCount > 0
-        ? `Inputs (${Math.min(collectedNumericCount, requiredNumericCount)}/${requiredNumericCount})`
-        : "Inputs",
-    complete: "Report",
+  if (roiProgressStep) {
+    const numericSummary = requiredNumericCount > 0
+      ? `${Math.min(collectedNumericCount, requiredNumericCount)}/${requiredNumericCount}`
+      : "n/a";
+    lines.push({ prefix: "[roi ]", message: `phase=${roiProgressStep} fields=${numericSummary}` });
+  }
+  if (showProcessingSplash) {
+    lines.push({ prefix: "[proc]", message: processingSplashLine });
+  }
+  if (activeSubtitleText) {
+    lines.push({ prefix: "[tts ]", message: compactConsoleText(activeSubtitleText) });
+  } else if (currentQuestionText && state !== "idle") {
+    lines.push({ prefix: "[prompt]", message: compactConsoleText(currentQuestionText) });
+  } else if (state === "idle") {
+    lines.push({ prefix: "[ready]", message: "awaiting voice command" });
+  }
+  if (roiPendingDetail) {
+    lines.push({ prefix: "[input]", message: compactConsoleText(roiPendingDetail) });
+  }
+  if (errorToast) {
+    lines.push({ prefix: "[error]", message: compactConsoleText(errorToast) });
+  }
+  return lines.slice(0, 6);
+}
+
+function compactConsoleText(value: string): string {
+  const compacted = value.replace(/\s+/g, " ").trim();
+  if (compacted.length <= 140) return compacted;
+  return `${compacted.slice(0, 137)}...`;
+}
+
+function stateToConsoleMode(state: JuliaDemoState): string {
+  const labelByState: Record<JuliaDemoState, string> = {
+    idle: "ready",
+    listening: "mic_live",
+    processing: "reasoning",
+    "showing-document": "document_open",
+    "showing-selector": "selector_open",
+    "showing-roi-report": "report_open",
+    "asking-initial-intent": "boot_prompt",
+    "collecting-company-name": "collect_company",
+    "collecting-pain-points": "collect_pain_points",
+    "collecting-roi-field": "collect_inputs",
+    "playing-roi-question": "playing_prompt",
+    "roi-pending-input": "pending_input",
   };
-  const currentIndex = ordered.indexOf(current);
-  return ordered.map((id, index) => ({
-    id,
-    label: labels[id],
-    status: index < currentIndex ? "done" : index === currentIndex ? "active" : "upcoming",
-  }));
+  return labelByState[state];
 }

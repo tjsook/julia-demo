@@ -453,12 +453,78 @@
 }
 
 .captionsLine {
-  max-width: min(760px, calc(100vw - 72px));
+  position: absolute;
+  left: 50%;
+  bottom: 26px;
+  transform: translateX(-50%);
+  width: min(760px, calc(100vw - 72px));
   color: rgba(255, 255, 255, 0.7);
   font-size: 12px;
   font-weight: 560;
   line-height: 1.45;
   text-align: center;
+  pointer-events: none;
+}
+
+.processingSplash {
+  position: absolute;
+  left: 50%;
+  bottom: 58px;
+  transform: translateX(-50%);
+  width: min(520px, calc(100vw - 64px));
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 12px;
+  font-weight: 560;
+  letter-spacing: 0.03em;
+  font-family: "SFMono-Regular", Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  text-align: left;
+  pointer-events: none;
+}
+
+.demoConsole {
+  width: min(760px, calc(100vw - 64px));
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 10px;
+  background: rgba(5, 7, 11, 0.66);
+  box-shadow: 0 10px 34px rgba(0, 0, 0, 0.28);
+  overflow: hidden;
+}
+
+.demoConsoleHeader {
+  min-height: 32px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.11);
+  background: rgba(255, 255, 255, 0.04);
+  color: rgba(245, 197, 24, 0.78);
+  font-family: "SFMono-Regular", Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  font-size: 11px;
+  font-weight: 760;
+  letter-spacing: 0.08em;
+  display: flex;
+  align-items: center;
+  padding: 0 12px;
+}
+
+.demoConsoleBody {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 12px 12px;
+}
+
+.demoConsoleLine {
+  min-height: 18px;
+  color: rgba(255, 255, 255, 0.84);
+  font-family: "SFMono-Regular", Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  font-size: 12px;
+  line-height: 1.45;
+  display: grid;
+  grid-template-columns: 56px minmax(0, 1fr);
+  gap: 8px;
+}
+
+.demoConsolePrefix {
+  color: rgba(245, 197, 24, 0.82);
+  font-weight: 700;
 }
 
 .orbAlertDot {
@@ -1274,7 +1340,29 @@
 
   .captionsLine {
     font-size: 11px;
-    max-width: calc(100vw - 34px);
+    width: calc(100vw - 34px);
+    bottom: 18px;
+  }
+
+  .processingSplash {
+    width: calc(100vw - 40px);
+    bottom: 46px;
+    font-size: 11px;
+  }
+
+  .demoConsole {
+    width: calc(100vw - 28px);
+  }
+
+  .demoConsoleBody {
+    gap: 5px;
+    padding: 9px 10px 10px;
+  }
+
+  .demoConsoleLine {
+    font-size: 11px;
+    grid-template-columns: 50px minmax(0, 1fr);
+    gap: 6px;
   }
 
   .demoHint {

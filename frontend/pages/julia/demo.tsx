@@ -24,6 +24,9 @@ export default function JuliaDemoPage() {
         roiPendingDetail={demo.roiPendingDetail}
         micAmplitudeRef={demo.micAmplitudeRef}
         currentQuestionText={demo.currentQuestionText}
+        activeSubtitleText={demo.activeSubtitleText}
+        showProcessingSplash={demo.showProcessingSplash}
+        processingSplashLine={demo.processingSplashLine}
         roiProgressStep={demo.roiProgressStep}
         requiredNumericCount={demo.requiredNumericCount}
         collectedNumericCount={demo.collectedNumericCount}
@@ -41,6 +44,7 @@ export default function JuliaDemoPage() {
         recording={demo.debugRecording}
         stageTranscripts={demo.debugStageTranscripts}
         currentQuestionText={demo.currentQuestionText}
+        startupTimingMarks={demo.startupTimingMarks}
       />
     </>
   );
