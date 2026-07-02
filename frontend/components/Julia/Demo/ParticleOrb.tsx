@@ -44,6 +44,7 @@ export function ParticleOrb({
   const modeRef = useRef<OrbMode>(mode);
   const previousModeRef = useRef<OrbMode>(mode);
   const amplitudeValueRef = useRef<number>(amplitude);
+  const amplitudeVisualRef = useRef(0);
   const externalAmplitudeRef = useRef<{ current: number } | null>(externalAmplitudeSource ?? null);
   const pointsRef = useRef<OrbPoint[]>([]);
   const noiseRef = useRef<(x: number, y: number, z: number) => number>(() => 0);
@@ -131,8 +132,10 @@ export function ParticleOrb({
 
     function renderFrame() {
       const currentMode = modeRef.current;
-      const sampledAmplitude = externalAmplitudeRef.current?.current ?? amplitudeValueRef.current;
-      const currentAmplitude = clamp01(sampledAmplitude);
+      const sampledAmplitude = clamp01(externalAmplitudeRef.current?.current ?? amplitudeValueRef.current);
+      const amplitudeLerp = sampledAmplitude > amplitudeVisualRef.current ? 0.34 : 0.14;
+      amplitudeVisualRef.current += (sampledAmplitude - amplitudeVisualRef.current) * amplitudeLerp;
+      const currentAmplitude = clamp01(amplitudeVisualRef.current);
       const targets = modeTargets(currentMode, currentAmplitude);
       const visuals = visualRef.current;
       const lerpStrength = 0.12;
@@ -183,8 +186,13 @@ export function ParticleOrb({
         const screenX = centerX + rx * radius * scale;
         const screenY = centerY + ry * radius * scale;
         const depth = clamp01((rz2 + 1.35) / 2.7);
+        const centerDistance = Math.hypot(screenX - centerX, screenY - centerY) / (size * 0.5);
+        const edgeFade = 1 - smoothstep(0.82, 1.03, centerDistance);
+        if (edgeFade <= 0.002) {
+          continue;
+        }
 
-        const alpha = (0.16 + depth * depth * 0.92) * visuals.opacity;
+        const alpha = (0.16 + depth * depth * 0.92) * visuals.opacity * edgeFade;
         const dotSize = (0.6 + depth * depth * 1.6) * visuals.dotScale;
         const warmMix = currentMode === "listening" ? currentAmplitude * 0.45 : 0;
         const warmed = blendColor(point.color, LISTENING_WARM_WHITE, warmMix);
@@ -241,10 +249,10 @@ function modeTargets(mode: OrbMode, amplitude: number): {
 } {
   if (mode === "listening") {
     return {
-      speed: 0.0026 * (1 + amplitude * 1.5),
-      noiseAmp: 0.3 + amplitude * 0.55,
+      speed: 0.0026 * (1 + amplitude * 1.9),
+      noiseAmp: 0.28 + amplitude * 0.42,
       brightness: 1,
-      dotScale: 1 + amplitude * 0.4,
+      dotScale: 1 + amplitude * 0.32,
       alertMix: 0,
       opacity: 1,
     };
@@ -325,6 +333,14 @@ function clamp01(value: number): number {
   if (value < 0) return 0;
   if (value > 1) return 1;
   return value;
+}
+
+function smoothstep(edge0: number, edge1: number, value: number): number {
+  if (edge0 === edge1) {
+    return value < edge0 ? 0 : 1;
+  }
+  const t = clamp01((value - edge0) / (edge1 - edge0));
+  return t * t * (3 - 2 * t);
 }
 
 function blendColor(

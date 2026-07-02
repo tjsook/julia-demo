@@ -10,32 +10,33 @@ export function createAmplitudeMeter(
   const audioContext = new Context();
   const sourceNode = audioContext.createMediaStreamSource(stream);
   const analyser = audioContext.createAnalyser();
-  analyser.fftSize = 256;
-  analyser.smoothingTimeConstant = 0.7;
+  analyser.fftSize = 512;
+  analyser.smoothingTimeConstant = 0.82;
   sourceNode.connect(analyser);
 
-  const bins = new Uint8Array(analyser.frequencyBinCount);
+  const samples = new Uint8Array(analyser.fftSize);
   let rafId: number | null = null;
   let lastEmitAt = 0;
-  let smoothed = 0;
+  let envelope = 0;
 
   const tick = (now: number) => {
-    analyser.getByteFrequencyData(bins);
-    const start = 2;
-    const end = Math.min(30, bins.length - 1);
+    analyser.getByteTimeDomainData(samples);
     let sumSquares = 0;
-    let count = 0;
-    for (let index = start; index <= end; index += 1) {
-      const normalized = bins[index] / 255;
+    for (let index = 0; index < samples.length; index += 1) {
+      const normalized = (samples[index] - 128) / 128;
       sumSquares += normalized * normalized;
-      count += 1;
     }
-    const rms = count > 0 ? Math.sqrt(sumSquares / count) : 0;
-    smoothed = smoothed * 0.82 + rms * 0.18;
+    const rms = Math.sqrt(sumSquares / samples.length);
+    const noiseGate = 0.008;
+    const gated = Math.max(0, rms - noiseGate);
+    const normalized = clamp01(gated * 17.5);
+    const sensitive = Math.pow(normalized, 0.68);
+    const lerp = sensitive > envelope ? 0.42 : 0.12;
+    envelope += (sensitive - envelope) * lerp;
 
     if (now - lastEmitAt >= 33) {
       lastEmitAt = now;
-      onLevel(clamp01(smoothed * 2.2));
+      onLevel(clamp01(envelope));
     }
     rafId = window.requestAnimationFrame(tick);
   };
