@@ -152,7 +152,6 @@ function painPointLabel(id: string): string {
     phone_work_overload: "Phone work overload",
     manual_order_entry: "Manual order entry",
     invoicing_billing_slow: "Invoicing/billing slow",
-    high_fuel_cost: "High fuel cost",
     low_revenue_per_truck: "Low revenue per truck",
   };
   return labels[id] ?? id;

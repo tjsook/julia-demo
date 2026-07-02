@@ -49,24 +49,6 @@
       "label": "Office labor automated share",
       "unit": "ratio",
       "calibrated": false
-    },
-    "G": {
-      "value": 16000,
-      "label": "Gallons per truck per year",
-      "unit": "gallons",
-      "calibrated": false
-    },
-    "Fg": {
-      "value": 0.3,
-      "label": "Fuel discount gap per gallon",
-      "unit": "usd_per_gallon",
-      "calibrated": false
-    },
-    "Pr": {
-      "value": 100,
-      "label": "Hemut price per truck per month",
-      "unit": "usd",
-      "calibrated": false
     }
   },
   "derivation_rules": {
@@ -92,6 +74,11 @@
       "kind": "flat",
       "value": 0.5,
       "source": "ATRI uncollected detention"
+    },
+    "R": {
+      "kind": "flat",
+      "value": 2300,
+      "source": "default revenue per load"
     }
   },
   "pain_points": [
@@ -243,30 +230,6 @@
         "receivables piling up",
         "customers paying late",
         "pending invoices"
-      ]
-    },
-    {
-      "id": "high_fuel_cost",
-      "label": "High fuel cost",
-      "threshold": 0.7,
-      "equation_id": "E4",
-      "trigger_phrases": [
-        "fuel is killing us",
-        "overpaying for diesel",
-        "fuel cards",
-        "fuel costs are crazy",
-        "diesel prices",
-        "fuel surcharge",
-        "looking for fuel savings",
-        "want a better fuel program",
-        "efs card",
-        "comdata",
-        "pilot fuel",
-        "cents per gallon",
-        "per-gallon discount",
-        "fleet card",
-        "fuel discount program",
-        "fuel program"
       ]
     },
     {
