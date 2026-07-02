@@ -17,8 +17,11 @@ from app.schemas.julia_roi_models import (
     JuliaExtractedSValue,
     JuliaExtractedValue,
     JuliaExtractionVariables,
+    JuliaPainPointMatch,
+    JuliaROIFollowupFieldResult,
     JuliaROIExtractionLLMResponse,
     JuliaROIExtractionResult,
+    ROIPendingField,
 )
 
 _OPENAI_BASE_URL = "https://api.openai.com/v1"
@@ -443,6 +446,245 @@ class JuliaOpenAIService:
             matched_pain_points=clamped_pain_points,
             variables=filtered_variables,
         )
+
+    def extract_roi_pain_points(
+        self,
+        *,
+        transcript: str,
+        calibration: JuliaCalibrationModel,
+    ) -> list[JuliaPainPointMatch]:
+        """Extract only pain points from a dedicated pain-point stage answer."""
+        headers = {
+            "Authorization": f"Bearer {self._api_key}",
+            "Content-Type": "application/json",
+        }
+        pain_points = calibration.pain_points
+        schema = {
+            "type": "object",
+            "additionalProperties": False,
+            "properties": {
+                "pain_points": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "additionalProperties": False,
+                        "properties": {
+                            "id": {"type": "string", "enum": [pain.id for pain in pain_points]},
+                            "confidence": {"type": "number", "minimum": 0, "maximum": 1},
+                            "evidence": {"type": "string"},
+                        },
+                        "required": ["id", "confidence", "evidence"],
+                    },
+                }
+            },
+            "required": ["pain_points"],
+        }
+        messages = [
+            {
+                "role": "system",
+                "content": (
+                    "You extract only ROI pain points from one transcript. "
+                    "Return strict JSON and do not include pain points unless the rep clearly described them. "
+                    "Use verbatim evidence substrings from the transcript."
+                ),
+            },
+            {
+                "role": "user",
+                "content": (
+                    "Identify pain points from this transcript.\n\n"
+                    f"Transcript:\n{transcript}\n\n"
+                    "Pain point context:\n"
+                    + "\n".join(
+                        f"- {pain.id} ({pain.label}): {', '.join(pain.trigger_phrases)}"
+                        for pain in pain_points
+                    )
+                ),
+            },
+        ]
+        payload = {
+            "model": self._extraction_model,
+            "messages": messages,
+            "response_format": {
+                "type": "json_schema",
+                "json_schema": {
+                    "name": "julia_roi_pain_points",
+                    "strict": True,
+                    "schema": schema,
+                },
+            },
+            "temperature": 0,
+        }
+        raw_json = self._chat_completion_json(
+            headers=headers,
+            payload=payload,
+            error_code="extraction_failed",
+            error_prefix="OpenAI pain-point extraction",
+        )
+        try:
+            raw_points = raw_json.get("pain_points")
+            if not isinstance(raw_points, list):
+                raise ValueError("Missing pain_points list.")
+            return [
+                JuliaPainPointMatch.model_validate(point).model_copy(
+                    update={"confidence": _clamp_confidence(float(point.get("confidence", 0.0)))}
+                )
+                for point in raw_points
+                if isinstance(point, dict)
+            ]
+        except Exception as exc:
+            raise JuliaOpenAIError(
+                "extraction_failed",
+                f"OpenAI pain-point extraction response parsing failed: {exc}",
+            ) from exc
+
+    def extract_roi_followup_field(
+        self,
+        *,
+        transcript: str,
+        expected_field: ROIPendingField,
+        calibration: JuliaCalibrationModel,
+    ) -> JuliaROIFollowupFieldResult:
+        """Extract one expected follow-up field answer with classification status."""
+        if expected_field not in {"T", "S", "P", "Ld", "Du"}:
+            raise JuliaOpenAIError(
+                "followup_extraction_failed",
+                f"Unsupported follow-up field: {expected_field}.",
+            )
+
+        headers = {
+            "Authorization": f"Bearer {self._api_key}",
+            "Content-Type": "application/json",
+        }
+        s_bucket_enum = list(calibration.qualitative_buckets.S.model_dump().keys())
+        du_bucket_enum = list(calibration.qualitative_buckets.Du.model_dump().keys())
+        schema = {
+            "type": "object",
+            "additionalProperties": False,
+            "properties": {
+                "status": {
+                    "type": "string",
+                    "enum": [
+                        "value_captured",
+                        "needs_confirmation",
+                        "no_answer",
+                        "not_applicable_or_unknown",
+                    ],
+                },
+                "field": {"type": "string", "enum": [expected_field]},
+                "value": {"type": ["number", "null"]},
+                "qualitative_tag": {
+                    "type": ["string", "null"],
+                    "enum": [*(s_bucket_enum if expected_field == "S" else du_bucket_enum), None]
+                    if expected_field in {"S", "Du"}
+                    else [None],
+                },
+                "normalized_value": {"type": ["number", "null"]},
+                "confidence": {"type": "number", "minimum": 0, "maximum": 1},
+                "evidence": {"type": "string"},
+                "reason": {"type": "string"},
+            },
+            "required": [
+                "status",
+                "field",
+                "value",
+                "qualitative_tag",
+                "normalized_value",
+                "confidence",
+                "evidence",
+                "reason",
+            ],
+        }
+        messages = [
+            {
+                "role": "system",
+                "content": (
+                    "Classify one answer for one expected ROI field. "
+                    "Only extract the expected field. Never infer from unrelated numbers. "
+                    "Use status value_captured, needs_confirmation, no_answer, or not_applicable_or_unknown. "
+                    "Return strict JSON only."
+                ),
+            },
+            {
+                "role": "user",
+                "content": (
+                    f"Expected field: {expected_field}\n"
+                    f"Transcript: {transcript}\n\n"
+                    "Rules:\n"
+                    "- value_captured: clear direct answer with one plausible value.\n"
+                    "- needs_confirmation: noisy/ambiguous, multiple numbers, hedged phrasing.\n"
+                    "- no_answer: off-topic or no usable value.\n"
+                    "- not_applicable_or_unknown: explicit don't know/use default.\n"
+                    "- For S and Du, qualitative tags are allowed when no explicit numeric percentage is given."
+                ),
+            },
+        ]
+        payload = {
+            "model": self._extraction_model,
+            "messages": messages,
+            "response_format": {
+                "type": "json_schema",
+                "json_schema": {
+                    "name": "julia_roi_followup_field",
+                    "strict": True,
+                    "schema": schema,
+                },
+            },
+            "temperature": 0,
+        }
+        raw_json = self._chat_completion_json(
+            headers=headers,
+            payload=payload,
+            error_code="followup_extraction_failed",
+            error_prefix="OpenAI follow-up extraction",
+        )
+        try:
+            result = JuliaROIFollowupFieldResult.model_validate(raw_json)
+            return result.model_copy(update={"confidence": _clamp_confidence(result.confidence)})
+        except Exception as exc:
+            raise JuliaOpenAIError(
+                "followup_extraction_failed",
+                f"OpenAI follow-up extraction response parsing failed: {exc}",
+            ) from exc
+
+    def _chat_completion_json(
+        self,
+        *,
+        headers: dict[str, str],
+        payload: dict[str, Any],
+        error_code: str,
+        error_prefix: str,
+    ) -> dict[str, Any]:
+        try:
+            response = self._client.post(
+                _CHAT_COMPLETIONS_URL,
+                headers=headers,
+                json=payload,
+            )
+        except Exception as exc:
+            raise JuliaOpenAIError(error_code, f"{error_prefix} request failed: {exc}") from exc
+
+        if response.status_code >= 400:
+            raise JuliaOpenAIError(
+                error_code,
+                f"{error_prefix} failed with status {response.status_code}.",
+            )
+
+        try:
+            body = response.json()
+            choices = body.get("choices") if isinstance(body, dict) else None
+            message = choices[0].get("message") if isinstance(choices, list) and choices else None
+            content = message.get("content") if isinstance(message, dict) else None
+            if not isinstance(content, str) or not content.strip():
+                raise ValueError("Missing structured content.")
+            raw_json = json.loads(content)
+            if not isinstance(raw_json, dict):
+                raise ValueError("Structured content must decode to an object.")
+            return raw_json
+        except Exception as exc:
+            raise JuliaOpenAIError(
+                error_code,
+                f"{error_prefix} response parsing failed: {exc}",
+            ) from exc
 
 
 def _qualitative_fraction_var_schema(*, bucket_enum: list[str]) -> dict[str, Any]:

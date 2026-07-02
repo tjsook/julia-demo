@@ -24,9 +24,22 @@ INPUT_SYMBOLS: tuple[str, ...] = ("T", "S", "P", "Ld", "Du")
 
 EquationId = Literal["E1", "E2", "E3", "E3a", "E3b", "E3c", "E4", "E5"]
 InputSymbol = Literal["T", "S", "P", "Ld", "Du"]
-InputSource = Literal["rep", "rep_qualitative", "derived", "default"]
+InputSource = Literal["rep", "rep_qualitative", "derived", "default", "user_approved_default"]
 ROIPendingField = Literal["fleet_size", "company_name", "pain_points", "T", "S", "P", "Ld", "Du"]
-ROICollectionStage = Literal["intent", "company", "pain_points", "numeric_fields", "complete"]
+ROICollectionStage = Literal[
+    "intent",
+    "company",
+    "pain_points",
+    "numeric_fields",
+    "confirm_default",
+    "complete",
+]
+FieldAnswerStatus = Literal[
+    "value_captured",
+    "needs_confirmation",
+    "no_answer",
+    "not_applicable_or_unknown",
+]
 
 
 class JuliaCalibrationConstant(BaseModel):
@@ -275,6 +288,19 @@ class JuliaROIExtractionResult(BaseModel):
     variables: JuliaExtractionVariables = Field(default_factory=JuliaExtractionVariables)
 
 
+class JuliaROIFollowupFieldResult(BaseModel):
+    """Classification result for one expected follow-up ROI field."""
+
+    status: FieldAnswerStatus
+    field: ROIPendingField
+    value: float | None = None
+    qualitative_tag: SQualitativeTag | DuQualitativeTag | None = None
+    normalized_value: float | None = None
+    confidence: float = Field(ge=0.0, le=1.0)
+    evidence: str = ""
+    reason: str
+
+
 class JuliaResolvedInput(BaseModel):
     """Final value and provenance for an ROI input variable."""
 
@@ -325,6 +351,11 @@ class JuliaROICollectionSession(BaseModel):
     required_fields: list[ROIPendingField] = Field(default_factory=list)
     collected_fields: list[ROIPendingField] = Field(default_factory=list)
     missing_fields: list[ROIPendingField] = Field(default_factory=list)
+    resolved_inputs: dict[InputSymbol, JuliaResolvedInput] = Field(default_factory=dict)
+    pending_default_field: InputSymbol | None = None
+    pending_default_value: float | None = None
+    pending_default_rule: str | None = None
+    followup_markers: list[str] = Field(default_factory=list)
     stage: ROICollectionStage = "intent"
 
 
