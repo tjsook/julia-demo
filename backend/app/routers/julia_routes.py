@@ -252,10 +252,12 @@ def _resolved_input_from_followup_result(
     *,
     field: str,
     value: float | None,
+    unit: str | None,
     qualitative_tag: str | None,
     confidence: float,
     session: JuliaROICollectionSession,
     calibration,
+    followup_markers: list[str] | None = None,
 ) -> JuliaResolvedInput:
     if field == "T":
         if value is None:
@@ -289,9 +291,16 @@ def _resolved_input_from_followup_result(
     if field == "minutes_per_order":
         if value is None:
             raise ValueError("Minutes per order entry value is missing.")
-        if value <= 0:
+        normalized_value = float(value)
+        if unit == "hours":
+            normalized_value = normalized_value * 60.0
+            if followup_markers is not None:
+                followup_markers.append(
+                    f"Converted minutes_per_order from hours to minutes ({value:g}h -> {normalized_value:g}m)."
+                )
+        if normalized_value <= 0:
             raise ValueError("Minutes per order entry must be greater than 0.")
-        return JuliaResolvedInput(value=float(value), source="rep", confidence=confidence)
+        return JuliaResolvedInput(value=normalized_value, source="rep", confidence=confidence)
     if field in {"S", "Du"}:
         if value is not None:
             if value < 0 or value > 1:
@@ -859,10 +868,12 @@ async def voice_roi_followup(
                 session_state.resolved_inputs[field] = _resolved_input_from_followup_result(
                     field=field,
                     value=getattr(candidate, "value", None),
+                    unit=getattr(candidate, "unit", None),
                     qualitative_tag=getattr(candidate, "qualitative_tag", None),
                     confidence=float(getattr(candidate, "confidence", 0.0)),
                     session=session_state,
                     calibration=calibration,
+                    followup_markers=session_state.followup_markers,
                 )
                 session_state.collected_fields = _merge_unique(session_state.collected_fields, [field])
             except ValueError:
@@ -995,10 +1006,12 @@ async def voice_roi_followup(
             session_state.resolved_inputs[expected_field] = _resolved_input_from_followup_result(
                 field=expected_field,
                 value=extracted_value,
+                unit=followup_result.unit,
                 qualitative_tag=followup_result.qualitative_tag,
                 confidence=followup_result.confidence,
                 session=session_state,
                 calibration=calibration,
+                followup_markers=session_state.followup_markers,
             )
         except ValueError as exc:
             return pending_response(

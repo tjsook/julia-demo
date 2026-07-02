@@ -293,7 +293,7 @@ class JuliaOpenAIService:
                         "Ld": _positive_number_var_schema(max_value=10000),
                         "Du": _qualitative_fraction_var_schema(bucket_enum=du_bucket_enum),
                         "R": _positive_number_var_schema(max_value=50000),
-                        "minutes_per_order": _positive_number_var_schema(max_value=120),
+                        "minutes_per_order": _minutes_per_order_var_schema(max_value=120),
                     },
                     "required": ["T", "S", "P", "Ld", "Du", "R", "minutes_per_order"],
                 },
@@ -338,6 +338,8 @@ class JuliaOpenAIService:
                     "actually means, then quote their exact words as evidence.\n\n"
                     "Example — rep says \"they aren't using algorithms\":\n"
                     "- MATCH manual_load_matching with evidence \"aren't using algorithms\"\n"
+                    "Example — rep says \"using zero algorithms for planning\":\n"
+                    "- MATCH manual_load_matching with evidence \"zero algorithms for planning\"\n"
                     "- DO NOT match if the rep is off-topic or unclear.\n\n"
                     "Example — rep says \"spending 40 seconds per load putting in loads\":\n"
                     "- MATCH manual_order_entry with evidence \"putting in loads\"\n"
@@ -377,8 +379,10 @@ class JuliaOpenAIService:
                     "- 'roughly 2500 a load' -> R = {'value': 2500, 'confidence': 0.85}\n"
                     "- 'not sure on revenue per load' -> R = null\n"
                     "minutes_per_order (manual order-entry minutes per load/order):\n"
-                    "- 'three minutes per order' -> minutes_per_order = {'value': 3, 'confidence': 0.95}\n"
-                    "- 'about 2.5 minutes per load' -> minutes_per_order = {'value': 2.5, 'confidence': 0.85}\n"
+                    "- ALWAYS set unit to either 'minutes' or 'hours' when value is present.\n"
+                    "- 'three minutes per order' -> minutes_per_order = {'value': 3, 'unit': 'minutes', 'confidence': 0.95}\n"
+                    "- 'about 2.5 minutes per load' -> minutes_per_order = {'value': 2.5, 'unit': 'minutes', 'confidence': 0.85}\n"
+                    "- '0.05 hours per order' -> minutes_per_order = {'value': 0.05, 'unit': 'hours', 'confidence': 0.9}\n"
                     "- 'order entry is slow' -> minutes_per_order = null\n"
                     "Du (% detention uncaptured, MUST be decimal fraction 0-1 OR a qualitative_tag):\n"
                     "Numeric:\n"
@@ -497,7 +501,8 @@ class JuliaOpenAIService:
                 "content": (
                     "You extract only ROI pain points from one transcript. "
                     "Return strict JSON and do not include pain points unless the rep clearly described them. "
-                    "Use verbatim evidence substrings from the transcript."
+                    "Use verbatim evidence substrings from the transcript. "
+                    "Treat no/zero algorithm statements (for planning/dispatch/load matching) as manual_load_matching."
                 ),
             },
             {
@@ -505,6 +510,9 @@ class JuliaOpenAIService:
                 "content": (
                     "Identify pain points from this transcript.\n\n"
                     f"Transcript:\n{transcript}\n\n"
+                    "Examples:\n"
+                    "- 'they're using zero algorithms for planning' -> MATCH manual_load_matching\n"
+                    "- 'no matching algorithm' -> MATCH manual_load_matching\n\n"
                     "Pain point context:\n"
                     + "\n".join(
                         f"- {pain.id} ({pain.label}): {', '.join(pain.trigger_phrases)}"
@@ -584,6 +592,10 @@ class JuliaOpenAIService:
                 },
                 "field": {"type": "string", "enum": [expected_field]},
                 "value": {"type": ["number", "null"]},
+                "unit": {
+                    "type": ["string", "null"],
+                    "enum": ["minutes", "hours", None] if expected_field == "minutes_per_order" else [None],
+                },
                 "qualitative_tag": {
                     "type": ["string", "null"],
                     "enum": [*(s_bucket_enum if expected_field == "S" else du_bucket_enum), None]
@@ -599,6 +611,7 @@ class JuliaOpenAIService:
                 "status",
                 "field",
                 "value",
+                "unit",
                 "qualitative_tag",
                 "normalized_value",
                 "confidence",
@@ -614,6 +627,14 @@ class JuliaOpenAIService:
                 "normalized_value to 0.10.\n"
                 "- If the rep self-corrects (for example '10%, maybe 20%, yeah 20%'), use the final clear value.\n"
                 "- If multiple values remain unresolved (for example '10 or 20'), use needs_confirmation.\n"
+            )
+        minutes_specific_rules = ""
+        if expected_field == "minutes_per_order":
+            minutes_specific_rules = (
+                "\n- For minutes_per_order, capture the spoken numeric value in `value` and set `unit`.\n"
+                "- If the rep says minutes/min, set unit='minutes'.\n"
+                "- If the rep says hours/hr, set unit='hours'.\n"
+                "- If unit is omitted but context is order-entry time per load/order, default unit='minutes'.\n"
             )
         messages = [
             {
@@ -637,6 +658,7 @@ class JuliaOpenAIService:
                     "- not_applicable_or_unknown: explicit don't know/use default.\n"
                     "- For S and Du, qualitative tags are allowed when no explicit numeric percentage is given."
                     f"{percentage_specific_rules}"
+                    f"{minutes_specific_rules}"
                 ),
             },
         ]
@@ -731,6 +753,19 @@ def _positive_number_var_schema(*, max_value: float) -> dict[str, Any]:
             "confidence": {"type": "number", "minimum": 0, "maximum": 1},
         },
         "required": ["value", "confidence"],
+    }
+
+
+def _minutes_per_order_var_schema(*, max_value: float) -> dict[str, Any]:
+    return {
+        "type": ["object", "null"],
+        "additionalProperties": False,
+        "properties": {
+            "value": {"type": "number", "exclusiveMinimum": 0, "maximum": max_value},
+            "unit": {"type": "string", "enum": ["minutes", "hours"]},
+            "confidence": {"type": "number", "minimum": 0, "maximum": 1},
+        },
+        "required": ["value", "unit", "confidence"],
     }
 
 

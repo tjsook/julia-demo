@@ -330,13 +330,23 @@ class JuliaROIEngine:
             r_value = None
 
         minutes_per_order_value = variables.minutes_per_order
-        if minutes_per_order_value is not None and minutes_per_order_value.value <= 0:
-            range_rejections["minutes_per_order"] = (
-                "minutes_per_order extracted as "
-                f"{_format_number(minutes_per_order_value.value)} but must be greater than 0. "
-                "Treated as not provided."
-            )
-            minutes_per_order_value = None
+        if minutes_per_order_value is not None:
+            if minutes_per_order_value.unit == "hours":
+                converted_minutes = minutes_per_order_value.value * 60.0
+                range_rejections["minutes_per_order"] = (
+                    "minutes_per_order interpreted as hours and converted to minutes: "
+                    f"{_format_number(minutes_per_order_value.value)}h -> {_format_number(converted_minutes)}m."
+                )
+                minutes_per_order_value = minutes_per_order_value.model_copy(
+                    update={"value": converted_minutes, "unit": "minutes"}
+                )
+            if minutes_per_order_value.value <= 0:
+                range_rejections["minutes_per_order"] = (
+                    "minutes_per_order extracted as "
+                    f"{_format_number(minutes_per_order_value.value)} but must be greater than 0. "
+                    "Treated as not provided."
+                )
+                minutes_per_order_value = None
 
         return (
             JuliaExtractionVariables(

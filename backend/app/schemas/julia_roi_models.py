@@ -226,6 +226,7 @@ class JuliaExtractedValue(BaseModel):
 
     value: float
     confidence: float = Field(ge=0.0, le=1.0)
+    unit: Literal["minutes", "hours"] | None = None
 
 
 SQualitativeTag = Literal[
@@ -304,6 +305,7 @@ class JuliaROIFollowupFieldResult(BaseModel):
     status: FieldAnswerStatus
     field: ROIPendingField
     value: float | None = None
+    unit: Literal["minutes", "hours"] | None = None
     qualitative_tag: SQualitativeTag | DuQualitativeTag | None = None
     normalized_value: float | None = None
     confidence: float = Field(ge=0.0, le=1.0)
