@@ -710,6 +710,7 @@ async def voice_roi_followup(
         transcript=transcript,
         calibration=calibration,
     )
+    followup_confidence_threshold = calibration.extraction.numeric_confidence_threshold
     engine = _roi_engine()
 
     def pending_response(
@@ -959,7 +960,31 @@ async def voice_roi_followup(
                 ),
             )
 
-        if followup_result.status in {"no_answer", "needs_confirmation"}:
+        extracted_value = (
+            followup_result.normalized_value
+            if expected_field in {"S", "Du"} and followup_result.normalized_value is not None
+            else followup_result.value
+        )
+        has_captured_value = extracted_value is not None or followup_result.qualitative_tag is not None
+        status = followup_result.status
+        if (
+            status == "needs_confirmation"
+            and has_captured_value
+            and followup_result.confidence >= followup_confidence_threshold
+        ):
+            status = "value_captured"
+
+        if status == "value_captured" and followup_result.confidence < followup_confidence_threshold:
+            return pending_response(
+                next_field=expected_field,
+                detail=(
+                    f"I heard a possible {_field_label(expected_field)}, but I need a clearer answer. "
+                    f"{_question_text_for_field(expected_field)}"
+                ),
+                stage="numeric_fields",
+            )
+
+        if status in {"no_answer", "needs_confirmation"}:
             return pending_response(
                 next_field=expected_field,
                 detail=f"I could not capture {_field_label(expected_field)}. {_question_text_for_field(expected_field)}",
@@ -969,7 +994,7 @@ async def voice_roi_followup(
         try:
             session_state.resolved_inputs[expected_field] = _resolved_input_from_followup_result(
                 field=expected_field,
-                value=followup_result.value,
+                value=extracted_value,
                 qualitative_tag=followup_result.qualitative_tag,
                 confidence=followup_result.confidence,
                 session=session_state,

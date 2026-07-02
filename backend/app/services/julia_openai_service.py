@@ -606,6 +606,15 @@ class JuliaOpenAIService:
                 "reason",
             ],
         }
+        percentage_specific_rules = ""
+        if expected_field in {"S", "Du"}:
+            percentage_specific_rules = (
+                "\n- For S and Du, convert clear percent answers to decimal fractions in [0,1].\n"
+                "- If the rep says a plain number from 0 to 100 (for example '10'), treat it as percent and set "
+                "normalized_value to 0.10.\n"
+                "- If the rep self-corrects (for example '10%, maybe 20%, yeah 20%'), use the final clear value.\n"
+                "- If multiple values remain unresolved (for example '10 or 20'), use needs_confirmation.\n"
+            )
         messages = [
             {
                 "role": "system",
@@ -627,6 +636,7 @@ class JuliaOpenAIService:
                     "- no_answer: off-topic or no usable value.\n"
                     "- not_applicable_or_unknown: explicit don't know/use default.\n"
                     "- For S and Du, qualitative tags are allowed when no explicit numeric percentage is given."
+                    f"{percentage_specific_rules}"
                 ),
             },
         ]

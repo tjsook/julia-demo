@@ -308,7 +308,7 @@
     ]
   },
   "extraction": {
-    "numeric_confidence_threshold": 0.8
+    "numeric_confidence_threshold": 0.7
   },
   "qualitative_buckets": {
     "S": {
