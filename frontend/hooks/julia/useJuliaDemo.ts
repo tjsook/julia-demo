@@ -5,6 +5,7 @@ import {
   postJuliaRoiFollowup,
   postJuliaVoiceDocumentConfirmation,
   postJuliaVoiceGreeting,
+  postJuliaVoiceIntent,
 } from "../../lib/julia/api";
 import { getDashboardDisplayName, useCurrentUser } from "../../lib/auth";
 import {
@@ -51,6 +52,12 @@ type GuidedConversationStage =
 
 type RoiProgressStep = "company" | "pain_points" | "numeric_fields" | "complete" | null;
 
+export type JuliaTerminalRecognizedLine = {
+  key: string;
+  prefix: string;
+  message: string;
+};
+
 export type JuliaDebugStageTranscript = {
   id: number;
   stage: GuidedConversationStage | "error";
@@ -79,12 +86,52 @@ type OpenDocumentOptions = {
 };
 
 const GREETING_PLAYBACK_CACHE = new Map<string, JuliaVoicePlaybackResponse>();
-const PROCESSING_SPLASH_LINES = [
-  "syncing transcript",
-  "matching pain signals",
-  "resolving required fields",
-  "building ROI model",
+const PROCESSING_SPLASH_BASE_LINES = [
+  "await stt.normalize(transcript)",
+  "tokens = tokenize(transcript)",
+  "router.classify_intent(tokens)",
+  "schema.validate({ strict: true })",
+  "context.load(calibration.v1)",
+  "queue.push('julia.pipeline')",
+  "if (confidence < threshold) reprompt()",
+  "session.diff(required_fields, collected_fields)",
+  "resolver.next_missing_field()",
+  "metrics.emit('thinking_tick')",
 ] as const;
+const PROCESSING_SPLASH_STAGE_LINES: Record<GuidedConversationStage, readonly string[]> = {
+  initial_intent: [
+    "intent = classify_intent(transcript)",
+    "if (intent == 'doc') search(active_documents)",
+    "if (intent == 'roi') bootstrap(session)",
+  ],
+  company: [
+    "company_name = normalize_company_name(text)",
+    "company_name = strip_disfluency_prefix(company_name)",
+    "if (!company_name) ask('Which company is this for?')",
+  ],
+  pain_points: [
+    "pain_points = extract_roi_pain_points(transcript)",
+    "score(trigger_phrases, evidence)",
+    "rank(pain_points, by='confidence')",
+    "map('zero algorithms' -> manual_load_matching)",
+  ],
+  numeric_fields: [
+    "numeric = parse_numeric_answer(transcript)",
+    "normalize(percent -> fraction)",
+    "validate(range_constraints)",
+    "resolved_inputs[field] = rep_value",
+  ],
+  confirm_default: [
+    "confirm = parse_yes_no(transcript)",
+    "if (confirm == yes) apply(user_approved_default)",
+    "if (confirm == no) retain_missing(field)",
+  ],
+  complete: [
+    "roi = evaluate_guided_roi(session)",
+    "render(roi_payload)",
+  ],
+};
+const ENABLE_PROCESSING_FILLER_AUDIO = false;
 
 export function useJuliaDemo() {
   const { name, email } = useCurrentUser();
@@ -99,6 +146,7 @@ export function useJuliaDemo() {
   const [lastVoiceResponse, setLastVoiceResponse] = useState<JuliaVoiceIntentResponse | null>(null);
   const [ttsPlayback, setTtsPlayback] = useState<JuliaTtsPlayback | null>(null);
   const [activeSubtitleText, setActiveSubtitleText] = useState<string | null>(null);
+  const [isStartupLocked, setIsStartupLocked] = useState(true);
   const [processingSplashIndex, setProcessingSplashIndex] = useState(0);
   const [documentUrl, setDocumentUrl] = useState<string | null>(null);
   const [documentLoading, setDocumentLoading] = useState(false);
@@ -107,6 +155,8 @@ export function useJuliaDemo() {
   const [roiPendingDetail, setRoiPendingDetail] = useState<string | null>(null);
   const [roiCollectionSession, setRoiCollectionSession] =
     useState<JuliaROICollectionSession | null>(null);
+  const [terminalRecognizedLines, setTerminalRecognizedLines] = useState<JuliaTerminalRecognizedLine[]>([]);
+  const [terminalCancelMessage, setTerminalCancelMessage] = useState<string | null>(null);
   const [currentQuestionText, setCurrentQuestionText] = useState<string | null>(null);
   const [startupTimingMarks, setStartupTimingMarks] = useState<JuliaStartupTimingMark[]>([]);
   const [debugStageTranscripts, setDebugStageTranscripts] = useState<JuliaDebugStageTranscript[]>([]);
@@ -120,6 +170,7 @@ export function useJuliaDemo() {
   const fillerTimeoutRef = useRef<number | null>(null);
   const usedFillerSetRef = useRef<Set<string>>(new Set());
   const hasPlayedFillerInProcessingRef = useRef(false);
+  const cancelMessageTimeoutRef = useRef<number | null>(null);
 
   const spokenName = useMemo(() => {
     const displayName = getDashboardDisplayName(name, email);
@@ -194,6 +245,7 @@ export function useJuliaDemo() {
     setExpectedField(null);
     setRoiCollectionSession(null);
     setRoiPendingDetail(null);
+    setTerminalRecognizedLines([]);
   }, []);
 
   const appendDebugStageTranscript = useCallback(
@@ -243,6 +295,10 @@ export function useJuliaDemo() {
     }
     return null;
   }, [conversationStage, roiPayload, state]);
+  const processingSplashLines = useMemo(
+    () => buildProcessingSplashLines({ stage: conversationStage, expectedField }),
+    [conversationStage, expectedField],
+  );
 
   const handleIntent = useCallback((response: JuliaVoiceIntentResponse) => {
     appendDebugStageTranscript({
@@ -258,9 +314,22 @@ export function useJuliaDemo() {
     setDocumentError(null);
 
     if (isSilentVoiceIntent(response)) {
+      const wasCancelTranscript = isCancelTranscript(response.transcript);
       logSilentVoiceIntent(response);
       resetRoiCollection();
+      setRoiPayload(null);
+      setRoiPendingDetail(null);
       setCurrentQuestionText("What can I do for you today?");
+      setTtsPlayback(
+        playbackFromResponse(response, ["asking-initial-intent"], {
+          subtitleText: wasCancelTranscript
+            ? "Okay, cancelled. What can I do for you today?"
+            : "What can I do for you today?",
+        }),
+      );
+      if (wasCancelTranscript) {
+        setTerminalCancelMessage("voice cancel received");
+      }
       setState("asking-initial-intent");
       return;
     }
@@ -270,6 +339,10 @@ export function useJuliaDemo() {
         throw new Error("ROI analysis response is missing roi_payload.");
       }
       setRoiPayload(response.roi_payload);
+      setTerminalRecognizedLines(buildRecognizedTerminalLines({
+        session: null,
+        payload: response.roi_payload,
+      }));
       setTtsPlayback(playbackFromResponse(response, ["showing-roi-report"], { subtitleText: null }));
       setConversationStage("complete");
       setExpectedField(null);
@@ -301,6 +374,10 @@ export function useJuliaDemo() {
       setCurrentQuestionText(pending.question_text ?? pending.detail);
       setExpectedField(pending.next_field);
       setRoiCollectionSession(pending.session);
+      setTerminalRecognizedLines(buildRecognizedTerminalLines({
+        session: pending.session,
+        payload: null,
+      }));
 
       if (pending.next_field === "company_name") {
         setConversationStage("company");
@@ -388,17 +465,21 @@ export function useJuliaDemo() {
   });
   const typedDebugSnapshot: JuliaVoiceDebugSnapshot = debugSnapshot;
 
-  const submitFollowup: JuliaVoiceSubmitter = useCallback(async (recording) => {
+  const submitVoice: JuliaVoiceSubmitter = useCallback(async (recording, options) => {
+    if (conversationStage === "initial_intent") {
+      return postJuliaVoiceIntent(recording, options);
+    }
     if (!expectedField) {
       throw new Error("ROI follow-up submit is missing expectedField.");
     }
     if (!roiCollectionSession) {
       throw new Error("ROI follow-up submit is missing session state.");
     }
-    return postJuliaRoiFollowup(recording, expectedField, roiCollectionSession);
-  }, [expectedField, roiCollectionSession]);
+    return postJuliaRoiFollowup(recording, expectedField, roiCollectionSession, options);
+  }, [conversationStage, expectedField, roiCollectionSession]);
 
   const handleOrbClick = useCallback(() => {
+    if (isStartupLocked) return;
     if (
       state === "idle" ||
       state === "asking-initial-intent" ||
@@ -414,10 +495,9 @@ export function useJuliaDemo() {
 
     if (state === "listening") {
       setState("processing");
-      const submitter = conversationStage === "initial_intent" ? undefined : submitFollowup;
-      void stopAndSubmit(submitter);
+      void stopAndSubmit(submitVoice);
     }
-  }, [conversationStage, startListening, state, stopAndSubmit, submitFollowup]);
+  }, [isStartupLocked, startListening, state, stopAndSubmit, submitVoice]);
 
   const cancelListening = useCallback(() => {
     cancelVoiceListening();
@@ -436,6 +516,38 @@ export function useJuliaDemo() {
     setState("idle");
   }, [cancelVoiceListening, conversationStage]);
 
+  const stopAllPlayback = useCallback(() => {
+    if (fillerTimeoutRef.current !== null) {
+      window.clearTimeout(fillerTimeoutRef.current);
+      fillerTimeoutRef.current = null;
+    }
+    if (activeFillerAudioRef.current) {
+      activeFillerAudioRef.current.onended = null;
+      activeFillerAudioRef.current.onerror = null;
+      activeFillerAudioRef.current.pause();
+      activeFillerAudioRef.current = null;
+    }
+    if (activeTtsAudioRef.current) {
+      activeTtsAudioRef.current.onended = null;
+      activeTtsAudioRef.current.pause();
+      activeTtsAudioRef.current = null;
+    }
+    setTtsPlayback(null);
+    setActiveSubtitleText(null);
+  }, []);
+
+  const cancelActiveWork = useCallback((message: string) => {
+    cancelListening();
+    confirmationRequestRef.current += 1;
+    stopAllPlayback();
+    resetRoiCollection();
+    setRoiPayload(null);
+    setRoiPendingDetail(null);
+    setCurrentQuestionText("What can I do for you today?");
+    setTerminalCancelMessage(message);
+    setState("asking-initial-intent");
+  }, [cancelListening, resetRoiCollection, stopAllPlayback]);
+
   const closeForeground = useCallback(() => {
     confirmationRequestRef.current += 1;
     setState("idle");
@@ -448,6 +560,7 @@ export function useJuliaDemo() {
     setDocumentLoading(false);
     setRoiPayload(null);
     setCurrentQuestionText(null);
+    setTerminalCancelMessage(null);
     setDebugStageTranscripts([]);
     debugEntryIdRef.current = 0;
     resetRoiCollection();
@@ -461,6 +574,7 @@ export function useJuliaDemo() {
     hasPlayedGreetingRef.current = true;
     const greetingText = `Hey ${spokenName}, what can I do for you today?`;
     setCurrentQuestionText(greetingText);
+    setIsStartupLocked(true);
     setState("asking-initial-intent");
 
     void (async () => {
@@ -483,11 +597,13 @@ export function useJuliaDemo() {
           subtitleText: greetingText,
         });
         if (!greetingPlayback) {
+          setIsStartupLocked(false);
           setErrorToast("Julia couldn't play the greeting audio. Click the orb to start.");
           return;
         }
         setTtsPlayback(greetingPlayback);
       } catch (err) {
+        setIsStartupLocked(false);
         setErrorToast(err instanceof Error ? err.message : "Failed to load Julia greeting.");
       }
     })();
@@ -498,35 +614,60 @@ export function useJuliaDemo() {
       setProcessingSplashIndex(0);
       return;
     }
+    if (processingSplashLines.length <= 1) {
+      return;
+    }
     const intervalId = window.setInterval(() => {
-      setProcessingSplashIndex((current) => (current + 1) % PROCESSING_SPLASH_LINES.length);
+      setProcessingSplashIndex((current) => (current + 1) % processingSplashLines.length);
     }, 1100);
     return () => window.clearInterval(intervalId);
-  }, [state]);
+  }, [processingSplashLines.length, state]);
+
+  useEffect(() => {
+    if (!terminalCancelMessage) return;
+    if (cancelMessageTimeoutRef.current !== null) {
+      window.clearTimeout(cancelMessageTimeoutRef.current);
+    }
+    cancelMessageTimeoutRef.current = window.setTimeout(() => {
+      cancelMessageTimeoutRef.current = null;
+      setTerminalCancelMessage(null);
+    }, 2200);
+    return () => {
+      if (cancelMessageTimeoutRef.current !== null) {
+        window.clearTimeout(cancelMessageTimeoutRef.current);
+        cancelMessageTimeoutRef.current = null;
+      }
+    };
+  }, [terminalCancelMessage]);
 
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape" && state === "listening") {
+      if (
+        event.code === "Space"
+        && !event.repeat
+        && !isTypingTarget(event.target)
+      ) {
         event.preventDefault();
-        cancelListening();
+        handleOrbClick();
         return;
       }
-      if (event.key === "Escape") {
-        resetRoiCollection();
-        setCurrentQuestionText(null);
-        if (
-          state === "collecting-company-name" ||
-          state === "collecting-pain-points" ||
-          state === "collecting-roi-field"
-        ) {
-          setState("idle");
-        }
+      if (event.key !== "Escape") return;
+      if (
+        state === "listening" ||
+        state === "processing" ||
+        state === "collecting-company-name" ||
+        state === "collecting-pain-points" ||
+        state === "collecting-roi-field" ||
+        state === "roi-pending-input"
+      ) {
+        event.preventDefault();
+        cancelActiveWork("request aborted");
       }
     }
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [cancelListening, resetRoiCollection, state]);
+  }, [cancelActiveWork, handleOrbClick, state]);
 
   useEffect(() => {
     if (!ttsPlayback || !ttsPlayback.playIn.includes(state)) {
@@ -556,6 +697,9 @@ export function useJuliaDemo() {
       }
       setActiveSubtitleText(null);
       if (!ttsPlayback.autoStartListeningOnEnd) {
+        if (ttsPlayback.source === "greeting") {
+          setIsStartupLocked(false);
+        }
         return;
       }
       if (ttsPlayback.source === "greeting") {
@@ -566,6 +710,7 @@ export function useJuliaDemo() {
         await startListening();
         if (ttsPlayback.source === "greeting") {
           recordStartupTiming("mic_ready_listening");
+          setIsStartupLocked(false);
         }
       })();
     };
@@ -578,6 +723,9 @@ export function useJuliaDemo() {
         error: err instanceof Error ? err.message : "Audio playback failed.",
       });
       setActiveSubtitleText(null);
+      if (ttsPlayback.source === "greeting") {
+        setIsStartupLocked(false);
+      }
       setErrorToast("Julia couldn't play that prompt. Click the orb to continue.");
     });
 
@@ -611,6 +759,9 @@ export function useJuliaDemo() {
   }, [state]);
 
   useEffect(() => {
+    if (!ENABLE_PROCESSING_FILLER_AUDIO) {
+      return;
+    }
     if (state !== "processing") {
       return;
     }
@@ -676,6 +827,10 @@ export function useJuliaDemo() {
 
   useEffect(() => {
     return () => {
+      if (cancelMessageTimeoutRef.current !== null) {
+        window.clearTimeout(cancelMessageTimeoutRef.current);
+        cancelMessageTimeoutRef.current = null;
+      }
       if (fillerTimeoutRef.current !== null) {
         window.clearTimeout(fillerTimeoutRef.current);
         fillerTimeoutRef.current = null;
@@ -707,10 +862,13 @@ export function useJuliaDemo() {
     roiPayload,
     roiPendingDetail,
     roiCollectionSession,
+    terminalRecognizedLines,
+    terminalCancelMessage,
     currentQuestionText,
     activeSubtitleText,
     showProcessingSplash: state === "processing" && activeSubtitleText === null,
-    processingSplashLine: PROCESSING_SPLASH_LINES[processingSplashIndex],
+    processingSplashLine:
+      processingSplashLines[processingSplashIndex % processingSplashLines.length] ?? "processing...",
     roiProgressStep,
     requiredNumericCount: requiredNumericFields.length,
     collectedNumericCount,
@@ -720,11 +878,13 @@ export function useJuliaDemo() {
     debugDurationSeconds: typedDebugSnapshot.durationSeconds,
     debugRecording: typedDebugSnapshot.recording,
     micAmplitudeRef,
+    isStartupLocked,
     startupTimingMarks,
     debugStageTranscripts,
     handleOrbClick,
     openDocument,
     cancelListening,
+    cancelActiveWork,
     closeForeground,
     dismissError: () => setErrorToast(null),
     dismissRoiPending: () => setRoiPendingDetail(null),
@@ -794,4 +954,117 @@ function audioUrlFromBase64(base64Audio: string, mimeType: string): string {
     bytes[idx] = binary.charCodeAt(idx);
   }
   return URL.createObjectURL(new Blob([bytes], { type: mimeType }));
+}
+
+function buildRecognizedTerminalLines({
+  session,
+  payload,
+}: {
+  session: JuliaROICollectionSession | null;
+  payload: JuliaROIAnalysisPayload | null;
+}): JuliaTerminalRecognizedLine[] {
+  const lines: JuliaTerminalRecognizedLine[] = [];
+  const companyName = payload?.company_name ?? session?.company_name ?? null;
+  if (companyName) {
+    lines.push({
+      key: "company",
+      prefix: "[id  ]",
+      message: `company=${companyName}`,
+    });
+  }
+
+  const painPoints = payload?.matched_pain_points ?? session?.matched_pain_points ?? [];
+  for (const painPoint of painPoints) {
+    lines.push({
+      key: `pain:${painPoint.id}`,
+      prefix: "[pain]",
+      message: `${painPoint.id} conf=${formatConfidence(painPoint.confidence)}`,
+    });
+  }
+
+  const inputs = payload?.inputs ?? session?.resolved_inputs ?? {};
+  for (const field of ROI_INPUT_FIELD_ORDER) {
+    const input = inputs[field];
+    if (!input) continue;
+    lines.push({
+      key: `input:${field}`,
+      prefix: input.source === "user_approved_default" || input.source === "default" ? "[def ]" : "[num ]",
+      message: `${field}=${formatInputValue(field, input.value)} source=${input.source}`,
+    });
+  }
+
+  return lines;
+}
+
+const ROI_INPUT_FIELD_ORDER: Array<keyof JuliaROIAnalysisPayload["inputs"]> = [
+  "T",
+  "Ld",
+  "S",
+  "Du",
+  "P",
+  "R",
+  "minutes_per_order",
+];
+
+function formatInputValue(field: keyof JuliaROIAnalysisPayload["inputs"], value: number): string {
+  if (field === "T") return `${Math.round(value)} trucks`;
+  if (field === "Ld") return `${formatCompactNumber(value)}/day`;
+  if (field === "S" || field === "Du") return `${(value * 100).toFixed(1).replace(/\.0$/, "")}%`;
+  if (field === "P") return `${Math.round(value)} staff`;
+  if (field === "R") return `$${formatCompactNumber(value)}/load`;
+  if (field === "minutes_per_order") return `${formatCompactNumber(value)} min/order`;
+  return formatCompactNumber(value);
+}
+
+function formatCompactNumber(value: number): string {
+  return value.toLocaleString(undefined, { maximumFractionDigits: 2 });
+}
+
+function formatConfidence(value: number): string {
+  return value.toFixed(2);
+}
+
+function isCancelTranscript(transcript: string): boolean {
+  const normalized = transcript.trim().toLowerCase();
+  if (!normalized) return false;
+  if (
+    normalized.includes("cancel that")
+    || normalized.includes("never mind")
+    || normalized.includes("nevermind")
+    || normalized.includes("scratch that")
+    || normalized === "stop"
+  ) {
+    return true;
+  }
+  if (!normalized.startsWith("wait")) return false;
+  const remainder = normalized.replace(/^wait[\s,!.?-]*/, "");
+  if (!remainder) return true;
+  const words = remainder.split(/\s+/).filter(Boolean);
+  return words.length <= 3 && !/\d/.test(remainder);
+}
+
+function buildProcessingSplashLines({
+  stage,
+  expectedField,
+}: {
+  stage: GuidedConversationStage;
+  expectedField: JuliaROIPendingField | null;
+}): string[] {
+  const stageLines = PROCESSING_SPLASH_STAGE_LINES[stage] ?? [];
+  const fieldLines = (
+    stage === "numeric_fields" || stage === "confirm_default"
+  ) && expectedField
+    ? [
+        `field<${expectedField}> :: capture()`,
+        `guard(field='${expectedField}', source='rep')`,
+      ]
+    : [];
+  return [...fieldLines, ...stageLines, ...PROCESSING_SPLASH_BASE_LINES];
+}
+
+function isTypingTarget(target: EventTarget | null): boolean {
+  if (!(target instanceof HTMLElement)) return false;
+  if (target.isContentEditable) return true;
+  const tag = target.tagName;
+  return tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT";
 }

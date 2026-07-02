@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import type { MutableRefObject } from "react";
 
-import type { JuliaDemoState } from "../../../hooks/julia/useJuliaDemo";
+import type { JuliaDemoState, JuliaTerminalRecognizedLine } from "../../../hooks/julia/useJuliaDemo";
 import type { JuliaROIAnalysisPayload, JuliaVoiceMatch } from "../../../lib/julia/types";
 import s from "../../../styles/julia.module.css";
 import { DocumentModal } from "./DocumentModal";
@@ -22,6 +22,9 @@ type DemoShellProps = {
   roiPayload: JuliaROIAnalysisPayload | null;
   roiPendingDetail: string | null;
   micAmplitudeRef: MutableRefObject<number>;
+  isStartupLocked: boolean;
+  terminalRecognizedLines: JuliaTerminalRecognizedLine[];
+  terminalCancelMessage: string | null;
   currentQuestionText: string | null;
   activeSubtitleText: string | null;
   showProcessingSplash: boolean;
@@ -62,6 +65,9 @@ export function DemoShell({
   roiPayload,
   roiPendingDetail,
   micAmplitudeRef,
+  isStartupLocked,
+  terminalRecognizedLines,
+  terminalCancelMessage,
   currentQuestionText,
   activeSubtitleText,
   showProcessingSplash,
@@ -95,6 +101,8 @@ export function DemoShell({
         roiProgressStep,
         requiredNumericCount,
         collectedNumericCount,
+        terminalRecognizedLines,
+        terminalCancelMessage,
         currentQuestionText,
         roiPendingDetail,
         errorToast,
@@ -121,7 +129,7 @@ export function DemoShell({
           onClick={onOrbClick}
           size={orbSize}
           className={s.particleOrbButton}
-          disabled={state === "processing" || isDimmed}
+          disabled={isStartupLocked || state === "processing" || isDimmed}
         />
         {isDebugMode && !showConsole && <div className={s.demoStatus}>{statusLabel[state]}</div>}
         {interactionHint && !showConsole && <div className={s.demoHint}>{interactionHint}</div>}
@@ -206,6 +214,8 @@ function buildShowConsoleLines({
   roiProgressStep,
   requiredNumericCount,
   collectedNumericCount,
+  terminalRecognizedLines,
+  terminalCancelMessage,
   currentQuestionText,
   roiPendingDetail,
   errorToast,
@@ -217,6 +227,8 @@ function buildShowConsoleLines({
   roiProgressStep: "company" | "pain_points" | "numeric_fields" | "complete" | null;
   requiredNumericCount: number;
   collectedNumericCount: number;
+  terminalRecognizedLines: JuliaTerminalRecognizedLine[];
+  terminalCancelMessage: string | null;
   currentQuestionText: string | null;
   roiPendingDetail: string | null;
   errorToast: string | null;
@@ -230,6 +242,7 @@ function buildShowConsoleLines({
       : "n/a";
     lines.push({ prefix: "[roi ]", message: `phase=${roiProgressStep} fields=${numericSummary}` });
   }
+  lines.push(...terminalRecognizedLines.map((line) => ({ prefix: line.prefix, message: line.message })));
   if (showProcessingSplash) {
     lines.push({ prefix: "[proc]", message: processingSplashLine });
   }
@@ -240,13 +253,16 @@ function buildShowConsoleLines({
   } else if (state === "idle") {
     lines.push({ prefix: "[ready]", message: "awaiting voice command" });
   }
+  if (terminalCancelMessage) {
+    lines.push({ prefix: "[cancel]", message: compactConsoleText(terminalCancelMessage) });
+  }
   if (roiPendingDetail) {
     lines.push({ prefix: "[input]", message: compactConsoleText(roiPendingDetail) });
   }
   if (errorToast) {
     lines.push({ prefix: "[error]", message: compactConsoleText(errorToast) });
   }
-  return lines.slice(0, 6);
+  return lines.slice(0, 9);
 }
 
 function compactConsoleText(value: string): string {

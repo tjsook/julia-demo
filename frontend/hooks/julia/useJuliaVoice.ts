@@ -29,6 +29,7 @@ type UseJuliaVoiceOptions = {
 
 export type JuliaVoiceSubmitter = (
   recording: JuliaRecordedAudio,
+  options?: { signal?: AbortSignal },
 ) => Promise<JuliaVoiceIntentResponse>;
 
 export function useJuliaVoice({ onIntent, onError, onAmplitude }: UseJuliaVoiceOptions) {
@@ -47,6 +48,8 @@ export function useJuliaVoice({ onIntent, onError, onAmplitude }: UseJuliaVoiceO
   const chunksRef = useRef<Blob[]>([]);
   const recordingStartedAtRef = useRef<number | null>(null);
   const amplitudeTeardownRef = useRef<(() => void) | null>(null);
+  const submitGenerationRef = useRef(0);
+  const activeSubmitAbortRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
     statusRef.current = status;
@@ -108,6 +111,24 @@ export function useJuliaVoice({ onIntent, onError, onAmplitude }: UseJuliaVoiceO
 
   const cancelListening = useCallback(() => {
     if (statusRef.current === "idle") return;
+    if (statusRef.current === "processing") {
+      submitGenerationRef.current += 1;
+      activeSubmitAbortRef.current?.abort();
+      activeSubmitAbortRef.current = null;
+      clearRecordingResources();
+      recordingStartedAtRef.current = null;
+      statusRef.current = "idle";
+      setStatus("idle");
+      setError(null);
+      setDebugSnapshot({
+        transcript: "[request_cancelled]",
+        stopReason: "error",
+        audioSizeMb: null,
+        durationSeconds: null,
+        recording: false,
+      });
+      return;
+    }
     const durationSeconds = recordingDurationSeconds();
     const audioSizeMb = chunkAudioSizeMb();
     const recorder = recorderRef.current;
@@ -132,10 +153,14 @@ export function useJuliaVoice({ onIntent, onError, onAmplitude }: UseJuliaVoiceO
 
   const stopAndSubmit = useCallback(async (submitter?: JuliaVoiceSubmitter) => {
     if (statusRef.current !== "listening") return;
+    const submitGeneration = submitGenerationRef.current + 1;
+    submitGenerationRef.current = submitGeneration;
     statusRef.current = "processing";
     setStatus("processing");
     setDebugSnapshot((current) => ({ ...current, recording: false }));
     const durationSeconds = recordingDurationSeconds();
+    const submitAbortController = new AbortController();
+    activeSubmitAbortRef.current = submitAbortController;
 
     try {
       const recording = await stopRecorderForAudio();
@@ -147,7 +172,13 @@ export function useJuliaVoice({ onIntent, onError, onAmplitude }: UseJuliaVoiceO
       recorderRef.current = null;
       chunksRef.current = [];
       const submit = submitter ?? postJuliaVoiceIntent;
-      const response = await submit(recording);
+      const response = await submit(recording, { signal: submitAbortController.signal });
+      if (
+        submitAbortController.signal.aborted ||
+        submitGenerationRef.current !== submitGeneration
+      ) {
+        return;
+      }
       onIntent(response);
       setError(null);
       setDebugSnapshot({
@@ -158,6 +189,16 @@ export function useJuliaVoice({ onIntent, onError, onAmplitude }: UseJuliaVoiceO
         recording: false,
       });
     } catch (err) {
+      if (isAbortError(err) || submitAbortController.signal.aborted) {
+        setDebugSnapshot({
+          transcript: "[request_cancelled]",
+          stopReason: "error",
+          audioSizeMb: null,
+          durationSeconds,
+          recording: false,
+        });
+        return;
+      }
       const audioSizeMb = chunkAudioSizeMb();
       if (err instanceof JuliaApiError) {
         setDebugSnapshot({
@@ -179,6 +220,9 @@ export function useJuliaVoice({ onIntent, onError, onAmplitude }: UseJuliaVoiceO
         reportError(err instanceof Error ? err.message : "Julia voice processing failed.");
       }
     } finally {
+      if (activeSubmitAbortRef.current === submitAbortController) {
+        activeSubmitAbortRef.current = null;
+      }
       clearRecordingResources();
       recordingStartedAtRef.current = null;
       statusRef.current = "idle";
@@ -262,6 +306,8 @@ export function useJuliaVoice({ onIntent, onError, onAmplitude }: UseJuliaVoiceO
 
   useEffect(() => {
     return () => {
+      activeSubmitAbortRef.current?.abort();
+      activeSubmitAbortRef.current = null;
       clearRecordingResources();
     };
   }, [clearRecordingResources]);
@@ -274,4 +320,9 @@ export function useJuliaVoice({ onIntent, onError, onAmplitude }: UseJuliaVoiceO
     cancelListening,
     debugSnapshot,
   };
+}
+
+function isAbortError(err: unknown): boolean {
+  if (!(err instanceof Error)) return false;
+  return err.name === "AbortError";
 }

@@ -44,6 +44,22 @@ NO_MATCH_TTS_TEXT = "I could not find that. Narrow down your query."
 ROI_COMPANY_QUESTION_TEXT = "Which company is this for?"
 ROI_PAIN_POINTS_QUESTION_TEXT = "What pain points did you identify in their office or operation?"
 INITIAL_GREETING_TEMPLATE = "Hey {name}, what can I do for you today?"
+CANCEL_TTS_TEXT = "Okay, cancelled. What can I do for you today?"
+EXPLICIT_CANCEL_PHRASES = (
+    "cancel that",
+    "never mind",
+    "nevermind",
+    "scratch that",
+    "stop",
+)
+CONTEXTUAL_NO_CANCEL_PHRASES = (
+    "no",
+    "nope",
+    "nah",
+    "no thanks",
+    "no thank you",
+    "not now",
+)
 ROI_FIELD_QUESTIONS: dict[str, str] = {
     "company_name": ROI_COMPANY_QUESTION_TEXT,
     "pain_points": ROI_PAIN_POINTS_QUESTION_TEXT,
@@ -249,6 +265,49 @@ def _parse_yes_no(transcript: str) -> bool | None:
     if any(token in lowered for token in no_tokens):
         return False
     return None
+
+
+def _normalize_cancel_text(transcript: str) -> str:
+    return re.sub(r"\s+", " ", transcript.strip().lower())
+
+
+def _is_wait_cancel_phrase(normalized_text: str) -> bool:
+    if not normalized_text.startswith("wait"):
+        return False
+    remainder = re.sub(r"^wait[\s,!.?-]*", "", normalized_text).strip()
+    if not remainder:
+        return True
+    if re.search(r"\d", remainder):
+        return False
+    return len(remainder.split()) <= 3
+
+
+def _is_cancel_phrase(transcript: str, *, allow_contextual_no: bool = False) -> bool:
+    normalized = _normalize_cancel_text(transcript)
+    if not normalized:
+        return False
+    if any(phrase in normalized for phrase in EXPLICIT_CANCEL_PHRASES):
+        return True
+    if _is_wait_cancel_phrase(normalized):
+        return True
+    if allow_contextual_no and normalized in CONTEXTUAL_NO_CANCEL_PHRASES:
+        return True
+    return False
+
+
+def _cancel_response(openai_service: JuliaOpenAIService, *, transcript: str) -> JuliaVoiceIntentResponse:
+    tts_audio_base64, tts_mime_type = _synthesize_voice_response(
+        openai_service,
+        text=CANCEL_TTS_TEXT,
+        doc_id=None,
+    )
+    return JuliaVoiceIntentResponse(
+        transcript=transcript,
+        intent="non_doc",
+        matches=[],
+        tts_audio_base64=tts_audio_base64,
+        tts_mime_type=tts_mime_type,
+    )
 
 
 def _format_default_value(field: str, value: float) -> str:
@@ -516,6 +575,9 @@ async def voice_intent(
         )
     transcript = normalized_transcript
 
+    if _is_cancel_phrase(transcript):
+        return _cancel_response(openai_service, transcript=transcript)
+
     classified = classify_intent(transcript, calibration.intent_classifier)
     effective_intent = classified.intent
     if effective_intent == IntentClass.UNKNOWN:
@@ -752,6 +814,11 @@ async def voice_roi_followup(
         transcript=transcript,
         calibration=calibration,
     )
+    if _is_cancel_phrase(
+        transcript,
+        allow_contextual_no=session_state.stage in {"company", "pain_points", "numeric_fields"},
+    ):
+        return _cancel_response(openai_service, transcript=transcript)
     followup_confidence_threshold = calibration.extraction.numeric_confidence_threshold
     engine = _roi_engine()
 
