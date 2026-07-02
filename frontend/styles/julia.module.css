@@ -435,6 +435,32 @@
   gap: 22px;
 }
 
+.captionsToggle {
+  position: absolute;
+  top: 22px;
+  right: 24px;
+  width: 34px;
+  height: 34px;
+  border: 1px solid rgba(255, 255, 255, 0.24);
+  border-radius: 8px;
+  background: rgba(5, 7, 11, 0.42);
+  color: rgba(255, 255, 255, 0.84);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  z-index: 2;
+}
+
+.captionsLine {
+  max-width: min(760px, calc(100vw - 72px));
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 12px;
+  font-weight: 560;
+  line-height: 1.45;
+  text-align: center;
+}
+
 .particleOrbButton {
   border: 0;
   border-radius: 50%;
@@ -1208,8 +1234,18 @@
     gap: 14px;
   }
 
+  .captionsToggle {
+    top: 16px;
+    right: 14px;
+  }
+
   .demoQuestion {
     font-size: 16px;
+  }
+
+  .captionsLine {
+    font-size: 11px;
+    max-width: calc(100vw - 34px);
   }
 
   .demoQuestionSubtle {

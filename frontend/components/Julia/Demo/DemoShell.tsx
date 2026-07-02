@@ -1,6 +1,7 @@
 import type { JuliaDemoState } from "../../../hooks/julia/useJuliaDemo";
 import type { JuliaROIAnalysisPayload, JuliaVoiceMatch } from "../../../lib/julia/types";
 import s from "../../../styles/julia.module.css";
+import { CaptionsToggle, useCaptionsEnabled } from "./CaptionsToggle";
 import { DocumentModal } from "./DocumentModal";
 import { DocumentSelector } from "./DocumentSelector";
 import { ErrorToast } from "./ErrorToast";
@@ -73,7 +74,7 @@ export function DemoShell({
         collectedNumericCount,
       })
     : [];
-  const compactStatusLabel = state === "listening" ? "Listening" : state === "processing" ? "Thinking" : "Ready";
+  const [captionsEnabled, toggleCaptions] = useCaptionsEnabled();
   const isDimmed =
     state === "showing-document" ||
     state === "showing-selector" ||
@@ -85,6 +86,7 @@ export function DemoShell({
   return (
     <main className={s.demoMain}>
       <div className={s.demoCenter}>
+        {!isDebugMode && <CaptionsToggle enabled={captionsEnabled} onToggle={toggleCaptions} />}
         <ParticleOrb
           mode={orbMode}
           onClick={onOrbClick}
@@ -92,17 +94,22 @@ export function DemoShell({
           className={s.particleOrbButton}
           disabled={state === "processing" || isDimmed}
         />
-        <div className={s.demoStatus}>{isDebugMode ? statusLabel[state] : compactStatusLabel}</div>
+        {isDebugMode && <div className={s.demoStatus}>{statusLabel[state]}</div>}
         {interactionHint && <div className={s.demoHint}>{interactionHint}</div>}
-        {currentQuestionText && (
-          <>
-            <div className={s.screenReaderOnly} role="status" aria-live="polite">
-              {currentQuestionText}
-            </div>
-            <div className={isDebugMode ? s.demoQuestion : s.demoQuestionSubtle} aria-hidden="true">
-              {currentQuestionText}
-            </div>
-          </>
+        {currentQuestionText && !captionsEnabled && (
+          <div className={s.screenReaderOnly} role="status" aria-live="polite">
+            {currentQuestionText}
+          </div>
+        )}
+        {currentQuestionText && isDebugMode && (
+          <div className={s.demoQuestion} aria-hidden="true">
+            {currentQuestionText}
+          </div>
+        )}
+        {!isDebugMode && captionsEnabled && currentQuestionText && (
+          <div className={s.captionsLine} role="status" aria-live="polite">
+            {currentQuestionText}
+          </div>
         )}
         {progressSteps.length > 0 && (
           <section className={s.roiProgress} aria-label="ROI progress">
