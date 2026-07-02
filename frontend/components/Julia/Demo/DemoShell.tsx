@@ -19,6 +19,9 @@ type DemoShellProps = {
   roiPayload: JuliaROIAnalysisPayload | null;
   roiPendingDetail: string | null;
   currentQuestionText: string | null;
+  roiProgressStep: "company" | "pain_points" | "numeric_fields" | "complete" | null;
+  requiredNumericCount: number;
+  collectedNumericCount: number;
   onOrbClick: () => void;
   onSelectMatch: (match: JuliaVoiceMatch) => void;
   onCloseForeground: () => void;
@@ -33,12 +36,12 @@ const statusLabel: Record<JuliaDemoState, string> = {
   "showing-document": "Document",
   "showing-selector": "Select document",
   "showing-roi-report": "ROI report",
-  "asking-initial-intent": "Listening Prompt",
-  "collecting-company-name": "Company Question",
-  "collecting-pain-points": "Pain-Point Question",
-  "collecting-roi-field": "ROI Field Question",
-  "playing-roi-question": "Playing Prompt",
-  "roi-pending-input": "Need Input",
+  "asking-initial-intent": "Julia prompt",
+  "collecting-company-name": "Company step",
+  "collecting-pain-points": "Pain-point step",
+  "collecting-roi-field": "Input step",
+  "playing-roi-question": "Playing prompt",
+  "roi-pending-input": "Waiting for input",
 };
 
 export function DemoShell({
@@ -52,21 +55,55 @@ export function DemoShell({
   roiPayload,
   roiPendingDetail,
   currentQuestionText,
+  roiProgressStep,
+  requiredNumericCount,
+  collectedNumericCount,
   onOrbClick,
   onSelectMatch,
   onCloseForeground,
   onDismissError,
   onDismissRoiPending,
 }: DemoShellProps) {
+  const interactionHint = hintTextForState(state);
+  const progressSteps = roiProgressStep
+    ? buildProgressSteps({
+        current: roiProgressStep,
+        requiredNumericCount,
+        collectedNumericCount,
+      })
+    : [];
+
   return (
     <main className={s.demoMain}>
       <div className={s.demoCenter}>
         <JuliaOrb state={state} onClick={onOrbClick} />
         <div className={s.demoStatus}>{statusLabel[state]}</div>
+        {interactionHint && <div className={s.demoHint}>{interactionHint}</div>}
         {currentQuestionText && (
           <div className={s.demoQuestion} role="status" aria-live="polite">
             {currentQuestionText}
           </div>
+        )}
+        {progressSteps.length > 0 && (
+          <section className={s.roiProgress} aria-label="ROI progress">
+            <div className={s.roiProgressTitle}>ROI progress</div>
+            <ol className={s.roiProgressList}>
+              {progressSteps.map((step) => (
+                <li
+                  key={step.id}
+                  className={
+                    step.status === "done"
+                      ? s.roiProgressDone
+                      : step.status === "active"
+                        ? s.roiProgressActive
+                        : s.roiProgressUpcoming
+                  }
+                >
+                  <span>{step.label}</span>
+                </li>
+              ))}
+            </ol>
+          </section>
         )}
       </div>
 
@@ -96,4 +133,58 @@ export function DemoShell({
       <RoiPendingInputToast detail={roiPendingDetail} onDismiss={onDismissRoiPending} />
     </main>
   );
+}
+
+function hintTextForState(state: JuliaDemoState): string | null {
+  if (
+    state === "asking-initial-intent" ||
+    state === "collecting-company-name" ||
+    state === "collecting-pain-points" ||
+    state === "collecting-roi-field"
+  ) {
+    return "Julia auto-starts listening after each spoken prompt. Click the orb when you finish speaking.";
+  }
+  if (state === "listening") {
+    return "Recording now. Click the orb to stop and submit.";
+  }
+  if (state === "processing") {
+    return "Processing your answer...";
+  }
+  return null;
+}
+
+function buildProgressSteps({
+  current,
+  requiredNumericCount,
+  collectedNumericCount,
+}: {
+  current: "company" | "pain_points" | "numeric_fields" | "complete";
+  requiredNumericCount: number;
+  collectedNumericCount: number;
+}): Array<{
+  id: "company" | "pain_points" | "numeric_fields" | "complete";
+  label: string;
+  status: "done" | "active" | "upcoming";
+}> {
+  const ordered: Array<"company" | "pain_points" | "numeric_fields" | "complete"> = [
+    "company",
+    "pain_points",
+    "numeric_fields",
+    "complete",
+  ];
+  const labels: Record<string, string> = {
+    company: "Company",
+    pain_points: "Pain points",
+    numeric_fields:
+      requiredNumericCount > 0
+        ? `Inputs (${Math.min(collectedNumericCount, requiredNumericCount)}/${requiredNumericCount})`
+        : "Inputs",
+    complete: "Report",
+  };
+  const currentIndex = ordered.indexOf(current);
+  return ordered.map((id, index) => ({
+    id,
+    label: labels[id],
+    status: index < currentIndex ? "done" : index === currentIndex ? "active" : "upcoming",
+  }));
 }
