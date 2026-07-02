@@ -92,6 +92,7 @@ const PROCESSING_SPLASH_LINES = [
   "resolving required fields",
   "building ROI model",
 ] as const;
+const ENABLE_PROCESSING_FILLER_AUDIO = false;
 
 export function useJuliaDemo() {
   const { name, email } = useCurrentUser();
@@ -703,6 +704,9 @@ export function useJuliaDemo() {
   }, [state]);
 
   useEffect(() => {
+    if (!ENABLE_PROCESSING_FILLER_AUDIO) {
+      return;
+    }
     if (state !== "processing") {
       return;
     }
