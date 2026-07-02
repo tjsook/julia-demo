@@ -175,13 +175,23 @@ def _normalize_company_name(raw_company_name: str | None) -> str | None:
         normalized,
         flags=re.IGNORECASE,
     )
+    normalized = re.sub(
+        r"^(?:(?:yeah|yep|yes|well|so|ok(?:ay)?)\s*[,.\-:;]*\s*)+",
+        "",
+        normalized,
+        flags=re.IGNORECASE,
+    )
 
     # Strip conversational wrappers frequently produced by STT/LLM around the company name.
+    normalized = re.sub(r"^(?:it\s*(?:is|'s)\s+for\s+)", "", normalized, flags=re.IGNORECASE)
+    normalized = re.sub(r"^(?:this\s+(?:one\s+)?is\s+for\s+)", "", normalized, flags=re.IGNORECASE)
     normalized = re.sub(r"^(?:i\s*(?:am|'m)\s+with\s+)", "", normalized, flags=re.IGNORECASE)
     normalized = re.sub(r"^(?:we\s*(?:are|'re)\s+with\s+)", "", normalized, flags=re.IGNORECASE)
     normalized = re.sub(r"^(?:this\s+is\s+for\s+)", "", normalized, flags=re.IGNORECASE)
     normalized = re.sub(r"^(?:for\s+)", "", normalized, flags=re.IGNORECASE)
+    normalized = re.sub(r"^(?:company\s+name\s*(?:is|=)\s+)", "", normalized, flags=re.IGNORECASE)
     normalized = re.sub(r"\s+(?:here|right)\s*[.?!,;:]*$", "", normalized, flags=re.IGNORECASE)
+    normalized = re.sub(r"\s*[,.\-:;]?\s*(?:yeah|yep|yes|ok(?:ay)?)\s*$", "", normalized, flags=re.IGNORECASE)
 
     # Final punctuation/whitespace cleanup.
     normalized = re.sub(r"^[\"'`]+|[\"'`]+$", "", normalized)
