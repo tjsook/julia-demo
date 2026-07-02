@@ -15,12 +15,18 @@ type RoiReportModalProps = {
   onClose: () => void;
 };
 
-const INPUT_ROWS: Array<{ key: keyof JuliaROIAnalysisPayload["inputs"]; label: string; format: "count" | "percent" }> = [
+const INPUT_ROWS: Array<{
+  key: keyof JuliaROIAnalysisPayload["inputs"];
+  label: string;
+  format: "count" | "percent" | "currency" | "decimal";
+}> = [
   { key: "T", label: "Trucks (T)", format: "count" },
   { key: "S", label: "% Spot (S)", format: "percent" },
   { key: "P", label: "Office people (P)", format: "count" },
   { key: "Ld", label: "Loads / day (Ld)", format: "count" },
   { key: "Du", label: "% Detention uncaptured", format: "percent" },
+  { key: "R", label: "Revenue / load (R)", format: "currency" },
+  { key: "minutes_per_order", label: "Minutes / order entry", format: "decimal" },
 ];
 
 export function RoiReportModal({ payload, onClose }: RoiReportModalProps) {
@@ -128,9 +134,15 @@ function formatCurrency(value: number): string {
   }).format(value);
 }
 
-function formatInputValue(value: number, mode: "count" | "percent"): string {
+function formatInputValue(value: number, mode: "count" | "percent" | "currency" | "decimal"): string {
   if (mode === "percent") {
     return `${Math.round(value * 100)}%`;
+  }
+  if (mode === "currency") {
+    return formatCurrency(value);
+  }
+  if (mode === "decimal") {
+    return new Intl.NumberFormat("en-US", { maximumFractionDigits: 2 }).format(value);
   }
   return new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 }).format(value);
 }

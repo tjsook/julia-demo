@@ -21,16 +21,15 @@ from app.schemas.julia_roi_models import (
 from app.services.julia_matcher import tokenize
 
 _FLEET_SIZE_REQUIRED_DETAIL = "Fleet size is required. Ask the prospect how many trucks they run."
-_GUIDED_FIELD_ORDER: tuple[str, ...] = ("T", "Ld", "S", "Du", "P")
+_GUIDED_FIELD_ORDER: tuple[str, ...] = ("T", "Ld", "S", "Du", "P", "R", "minutes_per_order")
 _EQUATION_REQUIRED_FIELDS: dict[EquationId, set[str]] = {
-    "E1": {"T", "Ld", "S"},
+    "E1": {"T", "Ld", "S", "R"},
     "E2": {"T", "Ld", "Du"},
     "E3": {"T", "P"},
     "E3a": {"T", "P"},
-    "E3b": {"T", "P"},
+    "E3b": {"T", "Ld", "minutes_per_order"},
     "E3c": {"T", "P"},
-    "E4": {"T"},
-    "E5": {"T", "Ld"},
+    "E5": {"T", "Ld", "R"},
 }
 
 
@@ -45,7 +44,7 @@ _EQUATION_DEFS: dict[EquationId, _EquationDef] = {
     "E1": _EquationDef(
         label="Matching algorithms (Helm)",
         formula="Ld × D × S × R × Up",
-        constants=("D", "R", "Up"),
+        constants=("D", "Up"),
     ),
     "E2": _EquationDef(
         label="Detention recovery",
@@ -64,23 +63,18 @@ _EQUATION_DEFS: dict[EquationId, _EquationDef] = {
     ),
     "E3b": _EquationDef(
         label="Order entry / re-keying savings",
-        formula="P × Lc × 0.10",
-        constants=("Lc",),
+        formula="Ld × D × minutes_per_order × (Lc / 2080 / 60)",
+        constants=("D", "Lc"),
     ),
     "E3c": _EquationDef(
         label="Invoicing / billing savings",
         formula="P × Lc × 0.05",
         constants=("Lc",),
     ),
-    "E4": _EquationDef(
-        label="Fuel card savings",
-        formula="T × G × Fg",
-        constants=("G", "Fg"),
-    ),
     "E5": _EquationDef(
         label="1% freight performance uplift",
         formula="(Ld × D × R) × 0.01",
-        constants=("D", "R"),
+        constants=("D",),
     ),
 }
 
@@ -146,12 +140,17 @@ class JuliaROIEngine:
             range_rejections=range_rejections,
             pain_point_drop_markers=[*evidence_markers, *threshold_markers],
         )
+        payload_inputs = {
+            symbol: entry
+            for symbol, entry in inputs.items()
+            if entry is not None
+        }
 
         return JuliaROIEngineResult(
             payload=JuliaROIAnalysisPayload(
                 company_name=extraction.company_name,
                 matched_pain_points=matched_pain_points,
-                inputs=inputs,
+                inputs=payload_inputs,
                 equations=equation_results,
                 summary=summary,
                 honesty_markers=honesty_markers,
@@ -235,6 +234,8 @@ class JuliaROIEngine:
             "P": inputs.get("P"),
             "Ld": inputs.get("Ld"),
             "Du": inputs.get("Du"),
+            "R": inputs.get("R"),
+            "minutes_per_order": inputs.get("minutes_per_order"),
         }
         equation_results = [
             self._evaluate_equation(equation_id, normalized_inputs, calibration)
@@ -303,10 +304,10 @@ class JuliaROIEngine:
                 )
                 ld_value = None
             elif t_value is not None:
-                ld_ceiling = t_value.value * 5
+                ld_ceiling = t_value.value * 10
                 if ld_value.value > ld_ceiling:
                     range_rejections["Ld"] = (
-                        f"Ld extracted as {_format_number(ld_value.value)} but exceeds sanity ceiling of T × 5 "
+                        f"Ld extracted as {_format_number(ld_value.value)} but exceeds sanity ceiling of T × 10 "
                         f"({_format_number(ld_ceiling)} for {_format_number(t_value.value)} trucks). "
                         "Treated as not provided; derived from T."
                     )
@@ -320,6 +321,23 @@ class JuliaROIEngine:
             )
             du_value = du_value.model_copy(update={"value": None})
 
+        r_value = variables.R
+        if r_value is not None and r_value.value <= 0:
+            range_rejections["R"] = (
+                f"R extracted as {_format_number(r_value.value)} but must be greater than 0. "
+                "Treated as not provided; used configured fallback."
+            )
+            r_value = None
+
+        minutes_per_order_value = variables.minutes_per_order
+        if minutes_per_order_value is not None and minutes_per_order_value.value <= 0:
+            range_rejections["minutes_per_order"] = (
+                "minutes_per_order extracted as "
+                f"{_format_number(minutes_per_order_value.value)} but must be greater than 0. "
+                "Treated as not provided."
+            )
+            minutes_per_order_value = None
+
         return (
             JuliaExtractionVariables(
                 T=t_value,
@@ -327,6 +345,8 @@ class JuliaROIEngine:
                 P=p_value,
                 Ld=ld_value,
                 Du=du_value,
+                R=r_value,
+                minutes_per_order=minutes_per_order_value,
             ),
             range_rejections,
         )
@@ -343,6 +363,8 @@ class JuliaROIEngine:
             "P": None,
             "Ld": None,
             "Du": None,
+            "R": None,
+            "minutes_per_order": None,
         }
 
         if t_value is not None:
@@ -376,6 +398,18 @@ class JuliaROIEngine:
             fleet_size=resolved["T"].value if resolved["T"] else None,
             calibration=calibration,
         )
+        resolved["R"] = self._resolve_optional_input(
+            symbol="R",
+            candidate=variables.R,
+            fleet_size=resolved["T"].value if resolved["T"] else None,
+            calibration=calibration,
+        )
+        if variables.minutes_per_order is not None:
+            resolved["minutes_per_order"] = JuliaResolvedInput(
+                value=variables.minutes_per_order.value,
+                source="rep",
+                confidence=variables.minutes_per_order.confidence,
+            )
         return resolved
 
     def _verify_pain_point_evidence(
@@ -574,7 +608,7 @@ class JuliaROIEngine:
 
         ordered = [
             equation_id
-            for equation_id in ("E1", "E2", "E3", "E3a", "E3b", "E3c", "E4", "E5")
+            for equation_id in ("E1", "E2", "E3", "E3a", "E3b", "E3c", "E5")
             if equation_id in selected_equations
         ]
         return ordered, selected
@@ -604,14 +638,15 @@ class JuliaROIEngine:
         if equation_id == "E1":
             ld = _required_input(inputs, "Ld")
             s = _required_input(inputs, "S")
+            r = _required_input(inputs, "R")
             inputs_used = {
                 "Ld": ld,
                 "D": constants["D"].value,
                 "S": s,
-                "R": constants["R"].value,
+                "R": r,
                 "Up": constants["Up"].value,
             }
-            result = ld * constants["D"].value * s * constants["R"].value * constants["Up"].value
+            result = ld * constants["D"].value * s * r * constants["Up"].value
         elif equation_id == "E2":
             ld = _required_input(inputs, "Ld")
             du = _required_input(inputs, "Du")
@@ -640,21 +675,25 @@ class JuliaROIEngine:
             inputs_used = {"P": p, "Lc": constants["Lc"].value}
             result = p * constants["Lc"].value * 0.15
         elif equation_id == "E3b":
-            p = _required_input(inputs, "P")
-            inputs_used = {"P": p, "Lc": constants["Lc"].value}
-            result = p * constants["Lc"].value * 0.10
+            ld = _required_input(inputs, "Ld")
+            minutes_per_order = _required_input(inputs, "minutes_per_order")
+            inputs_used = {
+                "Ld": ld,
+                "D": constants["D"].value,
+                "minutes_per_order": minutes_per_order,
+                "Lc": constants["Lc"].value,
+            }
+            annual_minutes = ld * constants["D"].value * minutes_per_order
+            result = (annual_minutes / 60.0) * (constants["Lc"].value / 2080.0)
         elif equation_id == "E3c":
             p = _required_input(inputs, "P")
             inputs_used = {"P": p, "Lc": constants["Lc"].value}
             result = p * constants["Lc"].value * 0.05
-        elif equation_id == "E4":
-            t = _required_input(inputs, "T")
-            inputs_used = {"T": t, "G": constants["G"].value, "Fg": constants["Fg"].value}
-            result = t * constants["G"].value * constants["Fg"].value
         elif equation_id == "E5":
             ld = _required_input(inputs, "Ld")
-            inputs_used = {"Ld": ld, "D": constants["D"].value, "R": constants["R"].value}
-            annual_freight = ld * constants["D"].value * constants["R"].value
+            r = _required_input(inputs, "R")
+            inputs_used = {"Ld": ld, "D": constants["D"].value, "R": r}
+            annual_freight = ld * constants["D"].value * r
             result = annual_freight * 0.01
         else:
             raise ValueError(f"Unsupported equation id: {equation_id}")
@@ -739,7 +778,20 @@ class JuliaROIEngine:
             elif ld.source == "user_approved_default":
                 markers.append(f"Ld defaulted to {ld.value:g} with explicit rep approval.")
 
-        if inputs.get("T") is not None and inputs.get("Ld") is not None:
+        r = inputs.get("R")
+        if r is not None:
+            if "R" in range_rejections:
+                markers.append(range_rejections["R"])
+            elif r.source == "user_approved_default":
+                markers.append(f"R defaulted to ${r.value:,.0f} with explicit rep approval.")
+            elif r.source == "default":
+                markers.append(f"R (revenue/load) defaulted to ${r.value:,.0f} — rep did not specify.")
+
+        minutes_per_order = inputs.get("minutes_per_order")
+        if minutes_per_order is not None and "minutes_per_order" in range_rejections:
+            markers.append(range_rejections["minutes_per_order"])
+
+        if inputs.get("T") is not None and inputs.get("Ld") is not None and inputs.get("R") is not None:
             markers.extend(self._implied_ratio_markers(inputs=inputs, calibration=calibration))
 
         used_constants: set[str] = set()
@@ -748,7 +800,7 @@ class JuliaROIEngine:
 
         placeholders = [symbol for symbol in used_constants if not calibration.constants[symbol].calibrated]
         if placeholders:
-            ordered = [symbol for symbol in ("D", "R", "Up", "Di", "Hb", "Dr", "Lc", "Oa", "G", "Fg") if symbol in placeholders]
+            ordered = [symbol for symbol in ("D", "Up", "Di", "Hb", "Dr", "Lc", "Oa") if symbol in placeholders]
             if len(ordered) == 1:
                 markers.append(
                     f"Constant {ordered[0]} is a placeholder value pending calibration with real fleet data."
@@ -784,8 +836,8 @@ class JuliaROIEngine:
     ) -> list[str]:
         trucks = _required_input(inputs, "T")
         loads_per_day = _required_input(inputs, "Ld")
+        revenue_per_load = _required_input(inputs, "R")
         operating_days = calibration.constants["D"].value
-        revenue_per_load = calibration.constants["R"].value
 
         implied_loads_per_truck_per_year = loads_per_day * operating_days / trucks
         implied_revenue_per_truck_per_year = loads_per_day * operating_days * revenue_per_load / trucks

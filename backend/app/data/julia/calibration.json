@@ -8,12 +8,6 @@
       "unit": "days",
       "calibrated": false
     },
-    "R": {
-      "value": 1800,
-      "label": "Average revenue per load",
-      "unit": "usd",
-      "calibrated": false
-    },
     "Up": {
       "value": 0.015,
       "label": "Utilization uplift from matching",

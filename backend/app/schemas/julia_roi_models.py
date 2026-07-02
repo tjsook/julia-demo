@@ -8,7 +8,6 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 CONSTANT_SYMBOLS: tuple[str, ...] = (
     "D",
-    "R",
     "Up",
     "Di",
     "Hb",
