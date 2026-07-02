@@ -92,7 +92,7 @@ export function DemoShell({
     state === "playing-roi-question";
   const orbMode =
     errorToast ? "alert" : isDimmed ? "dimmed" : state === "listening" ? "listening" : state === "processing" ? "processing" : "idle";
-  const showConsole = !isDebugMode && !isDimmed;
+  const showConsole = !isDimmed;
   const consoleLines = showConsole
     ? buildShowConsoleLines({
         state,
@@ -130,14 +130,14 @@ export function DemoShell({
           className={s.particleOrbButton}
           disabled={state === "processing" || isDimmed}
         />
-        {isDebugMode && <div className={s.demoStatus}>{statusLabel[state]}</div>}
-        {interactionHint && <div className={s.demoHint}>{interactionHint}</div>}
+        {isDebugMode && !showConsole && <div className={s.demoStatus}>{statusLabel[state]}</div>}
+        {interactionHint && !showConsole && <div className={s.demoHint}>{interactionHint}</div>}
         {currentQuestionText && (
           <div className={s.screenReaderOnly} role="status" aria-live="polite">
             {currentQuestionText}
           </div>
         )}
-        {currentQuestionText && isDebugMode && (
+        {currentQuestionText && isDebugMode && !showConsole && (
           <div className={s.demoQuestion} aria-hidden="true">
             {currentQuestionText}
           </div>
