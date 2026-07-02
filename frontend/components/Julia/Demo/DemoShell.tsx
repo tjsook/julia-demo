@@ -24,6 +24,7 @@ type DemoShellProps = {
   roiPendingDetail: string | null;
   micAmplitudeRef: MutableRefObject<number>;
   currentQuestionText: string | null;
+  activeSubtitleText: string | null;
   roiProgressStep: "company" | "pain_points" | "numeric_fields" | "complete" | null;
   requiredNumericCount: number;
   collectedNumericCount: number;
@@ -61,6 +62,7 @@ export function DemoShell({
   roiPendingDetail,
   micAmplitudeRef,
   currentQuestionText,
+  activeSubtitleText,
   roiProgressStep,
   requiredNumericCount,
   collectedNumericCount,
@@ -114,7 +116,7 @@ export function DemoShell({
         />
         {isDebugMode && <div className={s.demoStatus}>{statusLabel[state]}</div>}
         {interactionHint && <div className={s.demoHint}>{interactionHint}</div>}
-        {currentQuestionText && !captionsEnabled && (
+        {currentQuestionText && (
           <div className={s.screenReaderOnly} role="status" aria-live="polite">
             {currentQuestionText}
           </div>
@@ -124,9 +126,9 @@ export function DemoShell({
             {currentQuestionText}
           </div>
         )}
-        {!isDebugMode && captionsEnabled && currentQuestionText && (
-          <div className={s.captionsLine} role="status" aria-live="polite">
-            {currentQuestionText}
+        {!isDebugMode && captionsEnabled && activeSubtitleText && (
+          <div className={s.captionsLine} aria-hidden="true">
+            {activeSubtitleText}
           </div>
         )}
         {progressSteps.length > 0 && (

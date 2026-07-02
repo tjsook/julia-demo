@@ -70,6 +70,7 @@ type JuliaTtsPlayback = {
   playIn: JuliaDemoState[];
   autoStartListeningOnEnd?: boolean;
   source?: "greeting" | "general";
+  subtitleText?: string | null;
 };
 
 type OpenDocumentOptions = {
@@ -91,6 +92,7 @@ export function useJuliaDemo() {
   const [selectorMatches, setSelectorMatches] = useState<JuliaVoiceMatch[]>([]);
   const [lastVoiceResponse, setLastVoiceResponse] = useState<JuliaVoiceIntentResponse | null>(null);
   const [ttsPlayback, setTtsPlayback] = useState<JuliaTtsPlayback | null>(null);
+  const [activeSubtitleText, setActiveSubtitleText] = useState<string | null>(null);
   const [documentUrl, setDocumentUrl] = useState<string | null>(null);
   const [documentLoading, setDocumentLoading] = useState(false);
   const [documentError, setDocumentError] = useState<string | null>(null);
@@ -143,7 +145,11 @@ export function useJuliaDemo() {
     try {
       const response = await postJuliaVoiceDocumentConfirmation(match.id);
       if (confirmationRequestRef.current !== requestId) return;
-      setTtsPlayback(playbackFromResponse(response, ["showing-document"]));
+      setTtsPlayback(
+        playbackFromResponse(response, ["showing-document"], {
+          subtitleText: `Here's the ${match.title} document.`,
+        }),
+      );
     } catch (err) {
       console.log("julia.tts.selection_failed", {
         event: "julia.tts.selection_failed",
@@ -257,7 +263,7 @@ export function useJuliaDemo() {
         throw new Error("ROI analysis response is missing roi_payload.");
       }
       setRoiPayload(response.roi_payload);
-      setTtsPlayback(playbackFromResponse(response, ["showing-roi-report"]));
+      setTtsPlayback(playbackFromResponse(response, ["showing-roi-report"], { subtitleText: null }));
       setConversationStage("complete");
       setExpectedField(null);
       setRoiCollectionSession(null);
@@ -275,7 +281,10 @@ export function useJuliaDemo() {
       const pendingPlayback = playbackFromResponse(
         response,
         ["collecting-company-name", "collecting-pain-points", "collecting-roi-field"],
-        { autoStartListeningOnEnd: true },
+        {
+          autoStartListeningOnEnd: true,
+          subtitleText: pending.question_text ?? pending.detail,
+        },
       );
 
       setRoiPayload(null);
@@ -304,7 +313,11 @@ export function useJuliaDemo() {
     if (response.intent === "single_match" && response.matches[0]) {
       resetRoiCollection();
       setCurrentQuestionText(null);
-      setTtsPlayback(playbackFromResponse(response, ["showing-document"]));
+      setTtsPlayback(
+        playbackFromResponse(response, ["showing-document"], {
+          subtitleText: `Here's the ${response.matches[0].title} document.`,
+        }),
+      );
       void openDocument(response.matches[0], {
         playConfirmation: false,
         preservePlayback: true,
@@ -315,7 +328,11 @@ export function useJuliaDemo() {
     if (response.intent === "multi_match") {
       resetRoiCollection();
       setCurrentQuestionText(null);
-      setTtsPlayback(playbackFromResponse(response, ["showing-selector"]));
+      setTtsPlayback(
+        playbackFromResponse(response, ["showing-selector"], {
+          subtitleText: "I found multiple documents of that type. Which one do you want me to pull up?",
+        }),
+      );
       setSelectorMatches(response.matches);
       setState("showing-selector");
       return;
@@ -324,7 +341,11 @@ export function useJuliaDemo() {
     if (response.intent === "no_match") {
       resetRoiCollection();
       setCurrentQuestionText(null);
-      setTtsPlayback(playbackFromResponse(response, ["idle"]));
+      setTtsPlayback(
+        playbackFromResponse(response, ["idle"], {
+          subtitleText: "I could not find that. Narrow down your query.",
+        }),
+      );
       setState("idle");
       return;
     }
@@ -448,6 +469,7 @@ export function useJuliaDemo() {
         const greetingPlayback = playbackFromResponse(response, ["asking-initial-intent"], {
           autoStartListeningOnEnd: true,
           source: "greeting",
+          subtitleText: greetingText,
         });
         if (!greetingPlayback) {
           setErrorToast("Julia couldn't play the greeting audio. Click the orb to start.");
@@ -498,6 +520,7 @@ export function useJuliaDemo() {
 
     const audioUrl = audioUrlFromBase64(ttsPlayback.audioBase64, ttsPlayback.mimeType);
     const audio = new Audio(audioUrl);
+    setActiveSubtitleText(ttsPlayback.subtitleText ?? null);
     if (ttsPlayback.source === "greeting") {
       recordStartupTiming("greeting_audio_play_start");
     }
@@ -509,6 +532,7 @@ export function useJuliaDemo() {
       if (ttsPlayback.source === "greeting") {
         recordStartupTiming("greeting_audio_play_end");
       }
+      setActiveSubtitleText(null);
       if (!ttsPlayback.autoStartListeningOnEnd) {
         return;
       }
@@ -531,6 +555,7 @@ export function useJuliaDemo() {
         event: "julia.tts.play_failed",
         error: err instanceof Error ? err.message : "Audio playback failed.",
       });
+      setActiveSubtitleText(null);
       setErrorToast("Julia couldn't play that prompt. Click the orb to continue.");
     });
 
@@ -538,6 +563,7 @@ export function useJuliaDemo() {
       if (activeTtsAudioRef.current === audio) {
         activeTtsAudioRef.current = null;
       }
+      setActiveSubtitleText(null);
       audio.onended = null;
       audio.pause();
       URL.revokeObjectURL(audioUrl);
@@ -643,6 +669,7 @@ export function useJuliaDemo() {
         activeTtsAudioRef.current.pause();
         activeTtsAudioRef.current = null;
       }
+      setActiveSubtitleText(null);
     };
   }, []);
 
@@ -659,6 +686,7 @@ export function useJuliaDemo() {
     roiPendingDetail,
     roiCollectionSession,
     currentQuestionText,
+    activeSubtitleText,
     roiProgressStep,
     requiredNumericCount: requiredNumericFields.length,
     collectedNumericCount,
@@ -718,7 +746,11 @@ function formatPendingDetail(detail: string, questionText: string | null): strin
 function playbackFromResponse(
   response: JuliaVoiceIntentResponse | JuliaVoicePlaybackResponse,
   playIn: JuliaDemoState[],
-  options: { autoStartListeningOnEnd?: boolean; source?: "greeting" | "general" } = {},
+  options: {
+    autoStartListeningOnEnd?: boolean;
+    source?: "greeting" | "general";
+    subtitleText?: string | null;
+  } = {},
 ): JuliaTtsPlayback | null {
   if (!response.tts_audio_base64 || !response.tts_mime_type) return null;
   return {
@@ -727,6 +759,7 @@ function playbackFromResponse(
     playIn,
     autoStartListeningOnEnd: options.autoStartListeningOnEnd,
     source: options.source ?? "general",
+    subtitleText: options.subtitleText ?? null,
   };
 }
 

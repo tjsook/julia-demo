@@ -453,12 +453,17 @@
 }
 
 .captionsLine {
-  max-width: min(760px, calc(100vw - 72px));
+  position: absolute;
+  left: 50%;
+  bottom: 26px;
+  transform: translateX(-50%);
+  width: min(760px, calc(100vw - 72px));
   color: rgba(255, 255, 255, 0.7);
   font-size: 12px;
   font-weight: 560;
   line-height: 1.45;
   text-align: center;
+  pointer-events: none;
 }
 
 .orbAlertDot {
@@ -1274,7 +1279,8 @@
 
   .captionsLine {
     font-size: 11px;
-    max-width: calc(100vw - 34px);
+    width: calc(100vw - 34px);
+    bottom: 18px;
   }
 
   .demoHint {

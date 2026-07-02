@@ -24,6 +24,7 @@ export default function JuliaDemoPage() {
         roiPendingDetail={demo.roiPendingDetail}
         micAmplitudeRef={demo.micAmplitudeRef}
         currentQuestionText={demo.currentQuestionText}
+        activeSubtitleText={demo.activeSubtitleText}
         roiProgressStep={demo.roiProgressStep}
         requiredNumericCount={demo.requiredNumericCount}
         collectedNumericCount={demo.collectedNumericCount}
