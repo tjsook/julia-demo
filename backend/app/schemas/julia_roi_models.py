@@ -125,12 +125,22 @@ class JuliaEvidenceVerificationNormalize(BaseModel):
     collapse_whitespace: bool = True
 
 
+class JuliaEvidenceFuzzyFallbackConfig(BaseModel):
+    """Fuzzy evidence-match fallback controls."""
+
+    enabled: bool = False
+    min_overlap_ratio: float = Field(default=0.75, ge=0.0, le=1.0)
+
+
 class JuliaEvidenceVerificationConfig(BaseModel):
     """Pain-point evidence verification controls."""
 
     enabled: bool = True
     min_length_chars: int = Field(ge=1)
     normalize: JuliaEvidenceVerificationNormalize
+    fuzzy_fallback: JuliaEvidenceFuzzyFallbackConfig = Field(
+        default_factory=JuliaEvidenceFuzzyFallbackConfig
+    )
 
 
 class JuliaSanityBand(BaseModel):
@@ -243,6 +253,8 @@ class JuliaPainPointMatch(BaseModel):
     id: str
     confidence: float = Field(ge=0.0, le=1.0)
     evidence: str
+    evidence_match: Literal["verbatim", "fuzzy"] | None = None
+    evidence_overlap_ratio: float | None = Field(default=None, ge=0.0, le=1.0)
 
 
 class JuliaROIExtractionLLMResponse(BaseModel):
