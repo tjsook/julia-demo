@@ -27,7 +27,6 @@ from app.services.julia_document_service import JuliaDocumentService, JuliaServi
 from app.services.julia_intent_router import IntentClass, classify_intent
 from app.services.julia_matcher import JuliaMatchDocument, select_matches
 from app.services.julia_openai_service import JuliaOpenAIError, JuliaOpenAIService
-from app.services.julia_roi_engine import JuliaROIEngine
 
 router = APIRouter(prefix="/julia", tags=["julia"])
 logger = logging.getLogger(__name__)
@@ -35,6 +34,9 @@ MULTI_MATCH_TTS_TEXT = (
     "I found multiple documents of that type. Which one do you want me to pull up?"
 )
 NO_MATCH_TTS_TEXT = "I could not find that. Narrow down your query."
+ROI_COMPANY_QUESTION_TEXT = "Which company is this for?"
+ROI_PAIN_POINTS_QUESTION_TEXT = "What pain points did you identify in their office or operation?"
+INITIAL_GREETING_TEMPLATE = "Hey {name}, what can I do for you today?"
 
 
 def _max_voice_audio_mb() -> int:
@@ -51,10 +53,6 @@ def _service() -> JuliaDocumentService:
 
 def _openai_service() -> JuliaOpenAIService:
     return JuliaOpenAIService()
-
-
-def _roi_engine() -> JuliaROIEngine:
-    return JuliaROIEngine()
 
 
 def _error_response(exc: JuliaServiceError) -> JSONResponse:
@@ -139,6 +137,22 @@ def _synthesize_voice_response(
         return None, None
 
     return base64.b64encode(tts_audio).decode("ascii"), tts_mime_type
+
+
+def _normalize_company_name(raw_company_name: str | None) -> str | None:
+    if raw_company_name is None:
+        return None
+    trimmed = raw_company_name.strip()
+    return trimmed or None
+
+
+def _greeting_name(raw_first_name: str | None) -> str:
+    if raw_first_name is None:
+        return "there"
+    trimmed = raw_first_name.strip()
+    if not trimmed:
+        return "there"
+    return trimmed.split()[0]
 
 
 @router.post(
@@ -405,61 +419,85 @@ async def voice_intent(
     except JuliaOpenAIError as exc:
         return _julia_error(502, "extraction_failed", exc.detail)
 
-    engine_result = _roi_engine().evaluate_roi(
-        transcript=transcript,
-        extraction=extraction,
-        calibration=calibration,
-    )
-    if engine_result.pending is not None:
-        _log_voice_intent(
-            transcript=transcript,
-            intent="roi_pending_input",
-            token_count=classified.token_count,
-            metric_count=classified.metric_count,
-            matched_pain_points=[pain.id for pain in extraction.matched_pain_points],
-            fleet_size_provided=False,
-            elapsed_ms=int((time.perf_counter() - started_at) * 1000),
-        )
-        return JuliaVoiceIntentResponse(
-            transcript=transcript,
-            intent="roi_pending_input",
-            matches=[],
-            roi_pending=engine_result.pending,
-        )
+    company_name = _normalize_company_name(extraction.company_name)
+    required_fields = ["company_name", "pain_points"]
+    collected_fields: list[str] = []
+    missing_fields: list[str] = []
+    stage = "company"
+    question_text = ROI_COMPANY_QUESTION_TEXT
+    detail = "I can run ROI analysis after I capture the company name."
 
-    payload = engine_result.payload
-    if payload is None:
-        return _julia_error(
-            500,
-            "roi_engine_invalid_state",
-            "ROI engine returned neither pending input nor payload.",
-        )
+    if company_name is not None:
+        collected_fields.append("company_name")
+        missing_fields = ["pain_points"]
+        stage = "pain_points"
+        question_text = ROI_PAIN_POINTS_QUESTION_TEXT
+        detail = "Tell me the main pain points you identified in their office or operation."
+    else:
+        missing_fields = ["company_name"]
 
-    tts_text = (
-        f"Here's the ROI analysis for {payload.company_name}."
-        if payload.company_name
-        else "Here's the ROI analysis."
-    )
+    pending_payload = {
+        "missing": missing_fields,
+        "next_field": missing_fields[0],
+        "question_text": question_text,
+        "detail": detail,
+        "session": {
+            "original_transcript": transcript,
+            "answer_transcripts": [transcript],
+            "company_name": company_name,
+            "matched_pain_points": [],
+            "variables": extraction.variables.model_dump(),
+            "required_fields": required_fields,
+            "collected_fields": collected_fields,
+            "missing_fields": missing_fields,
+            "stage": stage,
+        },
+    }
+
     tts_audio_base64, tts_mime_type = _synthesize_voice_response(
         openai_service,
-        text=tts_text,
+        text=question_text,
         doc_id=None,
     )
 
     _log_voice_intent(
         transcript=transcript,
-        intent="roi_analysis",
+        intent="roi_pending_input",
         token_count=classified.token_count,
         metric_count=classified.metric_count,
-        matched_pain_points=[pain.id for pain in payload.matched_pain_points],
-        fleet_size_provided=True,
+        matched_pain_points=[pain.id for pain in extraction.matched_pain_points],
         elapsed_ms=int((time.perf_counter() - started_at) * 1000),
     )
     return JuliaVoiceIntentResponse(
         transcript=transcript,
-        intent="roi_analysis",
+        intent="roi_pending_input",
         matches=[],
-        roi_payload=payload,
+        roi_pending=pending_payload,
+        tts_audio_base64=tts_audio_base64,
+        tts_mime_type=tts_mime_type,
+    )
+
+
+@router.post(
+    "/voice/greeting",
+    response_model=JuliaVoicePlaybackResponse,
+    responses={
+        502: {"model": JuliaErrorResponse},
+    },
+)
+async def voice_greeting(
+    _user: Annotated[DashboardUser, Depends(require_dashboard_user)],
+    first_name: Annotated[str | None, Form()] = None,
+) -> JuliaVoicePlaybackResponse | JSONResponse:
+    """Synthesize Julia's opening greeting for the guided conversation shell."""
+    openai_service = _openai_service()
+    greeting_text = INITIAL_GREETING_TEMPLATE.format(name=_greeting_name(first_name))
+    tts_audio_base64, tts_mime_type = _synthesize_voice_response(
+        openai_service,
+        text=greeting_text,
+        doc_id=None,
+    )
+    return JuliaVoicePlaybackResponse(
         tts_audio_base64=tts_audio_base64,
         tts_mime_type=tts_mime_type,
     )

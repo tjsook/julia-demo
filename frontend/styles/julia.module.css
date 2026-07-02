@@ -476,6 +476,15 @@
   text-transform: uppercase;
 }
 
+.demoQuestion {
+  max-width: min(680px, calc(100vw - 40px));
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 18px;
+  font-weight: 620;
+  line-height: 1.45;
+  text-align: center;
+}
+
 .juliaDebugPanel {
   position: fixed;
   left: 16px;

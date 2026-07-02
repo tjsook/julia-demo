@@ -18,6 +18,7 @@ type DemoShellProps = {
   documentError: string | null;
   roiPayload: JuliaROIAnalysisPayload | null;
   roiPendingDetail: string | null;
+  currentQuestionText: string | null;
   onOrbClick: () => void;
   onSelectMatch: (match: JuliaVoiceMatch) => void;
   onCloseForeground: () => void;
@@ -32,7 +33,11 @@ const statusLabel: Record<JuliaDemoState, string> = {
   "showing-document": "Document",
   "showing-selector": "Select document",
   "showing-roi-report": "ROI report",
-  "roi-pending-input": "Need fleet size",
+  "asking-initial-intent": "Listening Prompt",
+  "collecting-company-name": "Company Question",
+  "collecting-pain-points": "Pain-Point Question",
+  "playing-roi-question": "Playing Prompt",
+  "roi-pending-input": "Need Input",
 };
 
 export function DemoShell({
@@ -45,6 +50,7 @@ export function DemoShell({
   documentError,
   roiPayload,
   roiPendingDetail,
+  currentQuestionText,
   onOrbClick,
   onSelectMatch,
   onCloseForeground,
@@ -56,6 +62,7 @@ export function DemoShell({
       <div className={s.demoCenter}>
         <JuliaOrb state={state} onClick={onOrbClick} />
         <div className={s.demoStatus}>{statusLabel[state]}</div>
+        {currentQuestionText && <div className={s.demoQuestion}>{currentQuestionText}</div>}
       </div>
 
       {state === "showing-document" && (

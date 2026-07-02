@@ -102,8 +102,40 @@ export interface JuliaROIAnalysisPayload {
 }
 
 export interface JuliaROIPendingInput {
-  missing: Array<"fleet_size">;
+  missing: string[];
+  next_field?: string | null;
+  question_text?: string | null;
   detail: string;
+  session?: JuliaROICollectionSession | null;
+}
+
+export type JuliaROIPendingField =
+  | "fleet_size"
+  | "company_name"
+  | "pain_points"
+  | "T"
+  | "S"
+  | "P"
+  | "Ld"
+  | "Du";
+
+export type JuliaROICollectionStage =
+  | "intent"
+  | "company"
+  | "pain_points"
+  | "numeric_fields"
+  | "complete";
+
+export interface JuliaROICollectionSession {
+  original_transcript: string;
+  answer_transcripts: string[];
+  company_name: string | null;
+  matched_pain_points: JuliaROIPainPointMatch[];
+  variables: Partial<Record<JuliaROIInputSymbol, unknown>>;
+  required_fields: JuliaROIPendingField[];
+  collected_fields: JuliaROIPendingField[];
+  missing_fields: JuliaROIPendingField[];
+  stage: JuliaROICollectionStage;
 }
 
 export interface JuliaVoiceIntentResponse {

@@ -136,6 +136,20 @@ export async function postJuliaVoiceIntent(
   return parseJuliaJson<JuliaVoiceIntentResponse>(res, "Failed to process Julia voice intent.");
 }
 
+export async function postJuliaVoiceGreeting(firstName?: string): Promise<JuliaVoicePlaybackResponse> {
+  const headers = await getDashboardAuthHeaders();
+  const form = new FormData();
+  if (firstName && firstName.trim()) {
+    form.set("first_name", firstName.trim());
+  }
+  const res = await fetch(`${BASE_URL}/julia/voice/greeting`, {
+    method: "POST",
+    headers,
+    body: form,
+  });
+  return parseJuliaJson<JuliaVoicePlaybackResponse>(res, "Failed to create Julia greeting prompt.");
+}
+
 export async function postJuliaVoiceDocumentConfirmation(
   documentId: string,
 ): Promise<JuliaVoicePlaybackResponse> {

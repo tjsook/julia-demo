@@ -11,7 +11,12 @@ export function JuliaOrb({ state, onClick }: JuliaOrbProps) {
     s.juliaOrb,
     state === "listening" ? s.juliaOrbListening : "",
     state === "processing" ? s.juliaOrbProcessing : "",
-    state === "showing-document" || state === "showing-selector" ? s.juliaOrbDimmed : "",
+    state === "showing-document" ||
+    state === "showing-selector" ||
+    state === "showing-roi-report" ||
+    state === "playing-roi-question"
+      ? s.juliaOrbDimmed
+      : "",
   ]
     .filter(Boolean)
     .join(" ");
@@ -22,7 +27,13 @@ export function JuliaOrb({ state, onClick }: JuliaOrbProps) {
       className={className}
       onClick={onClick}
       aria-label={state === "listening" ? "Stop listening" : "Start listening"}
-      disabled={state === "processing" || state === "showing-document" || state === "showing-selector"}
+      disabled={
+        state === "processing" ||
+        state === "showing-document" ||
+        state === "showing-selector" ||
+        state === "showing-roi-report" ||
+        state === "playing-roi-question"
+      }
     />
   );
 }
