@@ -18,6 +18,7 @@ from app.schemas.julia_roi_models import (
     JuliaROIPendingInput,
     JuliaROISummary,
 )
+from app.services.julia_matcher import tokenize
 
 _FLEET_SIZE_REQUIRED_DETAIL = "Fleet size is required. Ask the prospect how many trucks they run."
 
@@ -273,9 +274,12 @@ class JuliaROIEngine:
             return pain_point_matches, []
 
         normalized_transcript = self._normalize_text(transcript, calibration=calibration)
+        transcript_tokens = set(tokenize(normalized_transcript))
         min_length = config.min_length_chars
+        fuzzy_config = config.fuzzy_fallback
         surviving: list[JuliaPainPointMatch] = []
         dropped_markers: list[str] = []
+        fuzzy_markers: list[str] = []
 
         for match in pain_point_matches:
             normalized_evidence = self._normalize_text(match.evidence, calibration=calibration)
@@ -285,13 +289,33 @@ class JuliaROIEngine:
                 )
                 continue
             if normalized_evidence not in normalized_transcript:
+                if fuzzy_config.enabled:
+                    evidence_tokens = set(tokenize(normalized_evidence))
+                    if evidence_tokens:
+                        overlap_ratio = len(evidence_tokens & transcript_tokens) / len(evidence_tokens)
+                        if overlap_ratio >= fuzzy_config.min_overlap_ratio:
+                            surviving.append(
+                                match.model_copy(
+                                    update={
+                                        "evidence_match": "fuzzy",
+                                        "evidence_overlap_ratio": round(overlap_ratio, 2),
+                                    }
+                                )
+                            )
+                            fuzzy_markers.append(
+                                f"'{match.id}' matched via fuzzy evidence "
+                                f"({int(overlap_ratio * 100)}% token overlap)."
+                            )
+                            continue
                 dropped_markers.append(
                     f"Dropped '{match.id}' - LLM-supplied evidence not present in transcript."
                 )
                 continue
-            surviving.append(match)
+            surviving.append(
+                match.model_copy(update={"evidence_match": "verbatim", "evidence_overlap_ratio": None})
+            )
 
-        return surviving, dropped_markers
+        return surviving, [*dropped_markers, *fuzzy_markers]
 
     def _threshold_filter_pain_points(
         self,

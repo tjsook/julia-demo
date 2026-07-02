@@ -253,6 +253,8 @@ class JuliaPainPointMatch(BaseModel):
     id: str
     confidence: float = Field(ge=0.0, le=1.0)
     evidence: str
+    evidence_match: Literal["verbatim", "fuzzy"] | None = None
+    evidence_overlap_ratio: float | None = Field(default=None, ge=0.0, le=1.0)
 
 
 class JuliaROIExtractionLLMResponse(BaseModel):
