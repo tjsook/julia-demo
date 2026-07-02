@@ -22,6 +22,7 @@ export default function JuliaDemoPage() {
         documentError={demo.documentError}
         roiPayload={demo.roiPayload}
         roiPendingDetail={demo.roiPendingDetail}
+        micAmplitudeRef={demo.micAmplitudeRef}
         currentQuestionText={demo.currentQuestionText}
         roiProgressStep={demo.roiProgressStep}
         requiredNumericCount={demo.requiredNumericCount}

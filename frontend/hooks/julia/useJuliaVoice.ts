@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { JuliaApiError, postJuliaVoiceIntent } from "../../lib/julia/api";
+import { createAmplitudeMeter } from "../../lib/julia/amplitude";
 import {
   buildRecordedAudio,
   createMediaRecorder,
@@ -23,13 +24,14 @@ export type JuliaVoiceDebugSnapshot = {
 type UseJuliaVoiceOptions = {
   onIntent: (response: JuliaVoiceIntentResponse) => void;
   onError: (message: string) => void;
+  onAmplitude?: (level: number) => void;
 };
 
 export type JuliaVoiceSubmitter = (
   recording: JuliaRecordedAudio,
 ) => Promise<JuliaVoiceIntentResponse>;
 
-export function useJuliaVoice({ onIntent, onError }: UseJuliaVoiceOptions) {
+export function useJuliaVoice({ onIntent, onError, onAmplitude }: UseJuliaVoiceOptions) {
   const [status, setStatus] = useState<JuliaVoiceStatus>("idle");
   const [error, setError] = useState<string | null>(null);
   const [debugSnapshot, setDebugSnapshot] = useState<JuliaVoiceDebugSnapshot>({
@@ -44,19 +46,25 @@ export function useJuliaVoice({ onIntent, onError }: UseJuliaVoiceOptions) {
   const streamRef = useRef<MediaStream | null>(null);
   const chunksRef = useRef<Blob[]>([]);
   const recordingStartedAtRef = useRef<number | null>(null);
+  const amplitudeTeardownRef = useRef<(() => void) | null>(null);
 
   useEffect(() => {
     statusRef.current = status;
   }, [status]);
 
   const clearRecordingResources = useCallback(() => {
+    if (amplitudeTeardownRef.current) {
+      amplitudeTeardownRef.current();
+      amplitudeTeardownRef.current = null;
+      onAmplitude?.(0);
+    }
     if (streamRef.current) {
       stopMediaStream(streamRef.current);
       streamRef.current = null;
     }
     recorderRef.current = null;
     chunksRef.current = [];
-  }, []);
+  }, [onAmplitude]);
 
   const reportError = useCallback(
     (message: string) => {
@@ -198,6 +206,18 @@ export function useJuliaVoice({ onIntent, onError }: UseJuliaVoiceOptions) {
       streamRef.current = stream;
       recorderRef.current = recorder;
       chunksRef.current = [];
+      if (onAmplitude) {
+        try {
+          amplitudeTeardownRef.current = createAmplitudeMeter(stream, onAmplitude);
+        } catch (err) {
+          console.log("julia.voice.amplitude_unavailable", {
+            event: "julia.voice.amplitude_unavailable",
+            error: err instanceof Error ? err.message : "Amplitude meter unavailable.",
+          });
+          onAmplitude(0);
+          amplitudeTeardownRef.current = null;
+        }
+      }
       recorder.ondataavailable = (event) => {
         if (event.data.size > 0) chunksRef.current.push(event.data);
       };
@@ -238,7 +258,7 @@ export function useJuliaVoice({ onIntent, onError }: UseJuliaVoiceOptions) {
       });
       reportError(err instanceof Error ? err.message : "Julia voice recording failed to start.");
     }
-  }, [chunkAudioSizeMb, clearRecordingResources, recordingDurationSeconds, reportError]);
+  }, [chunkAudioSizeMb, clearRecordingResources, onAmplitude, recordingDurationSeconds, reportError]);
 
   useEffect(() => {
     return () => {

@@ -12,6 +12,7 @@ import {
   isSilentVoiceIntent,
   logSilentVoiceIntent,
 } from "../../lib/julia/intent";
+import { pickFillerSrc } from "../../lib/julia/fillers";
 import type {
   JuliaROIAnalysisPayload,
   JuliaROICollectionSession,
@@ -93,6 +94,12 @@ export function useJuliaDemo() {
   const debugEntryIdRef = useRef(0);
   const confirmationRequestRef = useRef(0);
   const hasPlayedGreetingRef = useRef(false);
+  const micAmplitudeRef = useRef(0);
+  const activeTtsAudioRef = useRef<HTMLAudioElement | null>(null);
+  const activeFillerAudioRef = useRef<HTMLAudioElement | null>(null);
+  const fillerTimeoutRef = useRef<number | null>(null);
+  const usedFillerSetRef = useRef<Set<string>>(new Set());
+  const hasPlayedFillerInProcessingRef = useRef(false);
 
   const spokenName = useMemo(() => {
     const displayName = getDashboardDisplayName(name, email);
@@ -237,8 +244,16 @@ export function useJuliaDemo() {
         throw new Error("ROI pending-input response is missing required follow-up fields.");
       }
 
+      const pendingPlayback = playbackFromResponse(
+        response,
+        ["collecting-company-name", "collecting-pain-points", "collecting-roi-field"],
+        { autoStartListeningOnEnd: true },
+      );
+
       setRoiPayload(null);
-      setRoiPendingDetail(formatPendingDetail(pending.detail, pending.question_text ?? null));
+      setRoiPendingDetail(
+        pendingPlayback ? null : formatPendingDetail(pending.detail, pending.question_text ?? null),
+      );
       setCurrentQuestionText(pending.question_text ?? pending.detail);
       setExpectedField(pending.next_field);
       setRoiCollectionSession(pending.session);
@@ -254,11 +269,7 @@ export function useJuliaDemo() {
         setState("collecting-roi-field");
       }
 
-      setTtsPlayback(
-        playbackFromResponse(response, ["collecting-company-name", "collecting-pain-points", "collecting-roi-field"], {
-          autoStartListeningOnEnd: true,
-        }),
-      );
+      setTtsPlayback(pendingPlayback);
       return;
     }
 
@@ -311,6 +322,9 @@ export function useJuliaDemo() {
   const voice = useJuliaVoice({
     onIntent: handleIntent,
     onError: handleError,
+    onAmplitude: useCallback((level: number) => {
+      micAmplitudeRef.current = level;
+    }, []),
   });
   const debugSnapshot: JuliaVoiceDebugSnapshot = voice.debugSnapshot;
 
@@ -434,9 +448,20 @@ export function useJuliaDemo() {
       return;
     }
 
+    if (activeFillerAudioRef.current) {
+      activeFillerAudioRef.current.onended = null;
+      activeFillerAudioRef.current.onerror = null;
+      activeFillerAudioRef.current.pause();
+      activeFillerAudioRef.current = null;
+    }
+
     const audioUrl = audioUrlFromBase64(ttsPlayback.audioBase64, ttsPlayback.mimeType);
     const audio = new Audio(audioUrl);
+    activeTtsAudioRef.current = audio;
     audio.onended = () => {
+      if (activeTtsAudioRef.current === audio) {
+        activeTtsAudioRef.current = null;
+      }
       if (!ttsPlayback.autoStartListeningOnEnd) {
         return;
       }
@@ -444,6 +469,9 @@ export function useJuliaDemo() {
       void voice.startListening();
     };
     audio.play().catch((err: unknown) => {
+      if (activeTtsAudioRef.current === audio) {
+        activeTtsAudioRef.current = null;
+      }
       console.log("julia.tts.play_failed", {
         event: "julia.tts.play_failed",
         error: err instanceof Error ? err.message : "Audio playback failed.",
@@ -452,11 +480,116 @@ export function useJuliaDemo() {
     });
 
     return () => {
+      if (activeTtsAudioRef.current === audio) {
+        activeTtsAudioRef.current = null;
+      }
       audio.onended = null;
       audio.pause();
       URL.revokeObjectURL(audioUrl);
     };
   }, [state, ttsPlayback, voice]);
+
+  useEffect(() => {
+    if (state === "processing") {
+      return;
+    }
+    hasPlayedFillerInProcessingRef.current = false;
+    usedFillerSetRef.current.clear();
+    if (fillerTimeoutRef.current !== null) {
+      window.clearTimeout(fillerTimeoutRef.current);
+      fillerTimeoutRef.current = null;
+    }
+    if (activeFillerAudioRef.current) {
+      activeFillerAudioRef.current.onended = null;
+      activeFillerAudioRef.current.onerror = null;
+      activeFillerAudioRef.current.pause();
+      activeFillerAudioRef.current = null;
+    }
+  }, [state]);
+
+  useEffect(() => {
+    if (state !== "processing") {
+      return;
+    }
+    if (
+      ttsPlayback ||
+      hasPlayedFillerInProcessingRef.current ||
+      activeTtsAudioRef.current ||
+      activeFillerAudioRef.current
+    ) {
+      return;
+    }
+
+    fillerTimeoutRef.current = window.setTimeout(() => {
+      fillerTimeoutRef.current = null;
+      if (
+        hasPlayedFillerInProcessingRef.current ||
+        activeTtsAudioRef.current ||
+        activeFillerAudioRef.current
+      ) {
+        return;
+      }
+
+      const fillerSrc = pickFillerSrc(usedFillerSetRef.current);
+      usedFillerSetRef.current.add(fillerSrc);
+      hasPlayedFillerInProcessingRef.current = true;
+      const audio = new Audio(fillerSrc);
+      activeFillerAudioRef.current = audio;
+
+      audio.onended = () => {
+        if (activeFillerAudioRef.current === audio) {
+          activeFillerAudioRef.current = null;
+        }
+      };
+      audio.onerror = () => {
+        if (activeFillerAudioRef.current === audio) {
+          activeFillerAudioRef.current = null;
+        }
+        console.log("julia.filler.play_failed", {
+          event: "julia.filler.play_failed",
+          error: "Filler playback hit an audio error event.",
+          src: fillerSrc,
+        });
+      };
+      audio.play().catch((err: unknown) => {
+        if (activeFillerAudioRef.current === audio) {
+          activeFillerAudioRef.current = null;
+        }
+        console.log("julia.filler.play_failed", {
+          event: "julia.filler.play_failed",
+          error: err instanceof Error ? err.message : "Filler playback failed.",
+          src: fillerSrc,
+        });
+      });
+    }, 2000);
+
+    return () => {
+      if (fillerTimeoutRef.current !== null) {
+        window.clearTimeout(fillerTimeoutRef.current);
+        fillerTimeoutRef.current = null;
+      }
+    };
+  }, [state, ttsPlayback]);
+
+  useEffect(() => {
+    return () => {
+      if (fillerTimeoutRef.current !== null) {
+        window.clearTimeout(fillerTimeoutRef.current);
+        fillerTimeoutRef.current = null;
+      }
+      if (activeFillerAudioRef.current) {
+        activeFillerAudioRef.current.onended = null;
+        activeFillerAudioRef.current.onerror = null;
+        activeFillerAudioRef.current.pause();
+        activeFillerAudioRef.current = null;
+      }
+      if (activeTtsAudioRef.current) {
+        activeTtsAudioRef.current.onended = null;
+        activeTtsAudioRef.current.pause();
+        activeTtsAudioRef.current = null;
+      }
+    };
+  }, []);
 
   return {
     state,
@@ -479,6 +612,7 @@ export function useJuliaDemo() {
     debugAudioSizeMb: debugSnapshot.audioSizeMb,
     debugDurationSeconds: debugSnapshot.durationSeconds,
     debugRecording: debugSnapshot.recording,
+    micAmplitudeRef,
     debugStageTranscripts,
     handleOrbClick,
     openDocument,

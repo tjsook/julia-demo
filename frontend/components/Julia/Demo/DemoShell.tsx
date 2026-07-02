@@ -1,10 +1,14 @@
+import { useEffect, useState } from "react";
+import type { MutableRefObject } from "react";
+
 import type { JuliaDemoState } from "../../../hooks/julia/useJuliaDemo";
 import type { JuliaROIAnalysisPayload, JuliaVoiceMatch } from "../../../lib/julia/types";
 import s from "../../../styles/julia.module.css";
+import { CaptionsToggle, useCaptionsEnabled } from "./CaptionsToggle";
 import { DocumentModal } from "./DocumentModal";
 import { DocumentSelector } from "./DocumentSelector";
-import { ErrorToast } from "./ErrorToast";
-import { JuliaOrb } from "./JuliaOrb";
+import { OrbAlertDot } from "./OrbAlertDot";
+import { ParticleOrb } from "./ParticleOrb";
 import { RoiPendingInputToast } from "./RoiPendingInputToast";
 import { RoiReportModal } from "./RoiReportModal";
 
@@ -18,6 +22,7 @@ type DemoShellProps = {
   documentError: string | null;
   roiPayload: JuliaROIAnalysisPayload | null;
   roiPendingDetail: string | null;
+  micAmplitudeRef: MutableRefObject<number>;
   currentQuestionText: string | null;
   roiProgressStep: "company" | "pain_points" | "numeric_fields" | "complete" | null;
   requiredNumericCount: number;
@@ -54,6 +59,7 @@ export function DemoShell({
   documentError,
   roiPayload,
   roiPendingDetail,
+  micAmplitudeRef,
   currentQuestionText,
   roiProgressStep,
   requiredNumericCount,
@@ -64,6 +70,7 @@ export function DemoShell({
   onDismissError,
   onDismissRoiPending,
 }: DemoShellProps) {
+  const [orbSize, setOrbSize] = useState(440);
   const isDebugMode = process.env.NEXT_PUBLIC_JULIA_DEBUG_MODE === "true";
   const interactionHint = isDebugMode ? hintTextForState(state) : null;
   const progressSteps = isDebugMode && roiProgressStep
@@ -73,23 +80,54 @@ export function DemoShell({
         collectedNumericCount,
       })
     : [];
-  const compactStatusLabel = state === "listening" ? "Listening" : state === "processing" ? "Thinking" : "Ready";
+  const [captionsEnabled, toggleCaptions] = useCaptionsEnabled();
+  const isDimmed =
+    state === "showing-document" ||
+    state === "showing-selector" ||
+    state === "showing-roi-report" ||
+    state === "playing-roi-question";
+  const orbMode =
+    errorToast ? "alert" : isDimmed ? "dimmed" : state === "listening" ? "listening" : state === "processing" ? "processing" : "idle";
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const updateOrbSize = () => {
+      const maxByViewport = Math.max(300, window.innerWidth - 48);
+      setOrbSize(Math.min(460, maxByViewport));
+    };
+    updateOrbSize();
+    window.addEventListener("resize", updateOrbSize);
+    return () => window.removeEventListener("resize", updateOrbSize);
+  }, []);
 
   return (
     <main className={s.demoMain}>
       <div className={s.demoCenter}>
-        <JuliaOrb state={state} onClick={onOrbClick} />
-        <div className={s.demoStatus}>{isDebugMode ? statusLabel[state] : compactStatusLabel}</div>
+        {!isDebugMode && <CaptionsToggle enabled={captionsEnabled} onToggle={toggleCaptions} />}
+        <ParticleOrb
+          mode={orbMode}
+          amplitudeRef={micAmplitudeRef}
+          onClick={onOrbClick}
+          size={orbSize}
+          className={s.particleOrbButton}
+          disabled={state === "processing" || isDimmed}
+        />
+        {isDebugMode && <div className={s.demoStatus}>{statusLabel[state]}</div>}
         {interactionHint && <div className={s.demoHint}>{interactionHint}</div>}
-        {currentQuestionText && (
-          <>
-            <div className={s.screenReaderOnly} role="status" aria-live="polite">
-              {currentQuestionText}
-            </div>
-            <div className={isDebugMode ? s.demoQuestion : s.demoQuestionSubtle} aria-hidden="true">
-              {currentQuestionText}
-            </div>
-          </>
+        {currentQuestionText && !captionsEnabled && (
+          <div className={s.screenReaderOnly} role="status" aria-live="polite">
+            {currentQuestionText}
+          </div>
+        )}
+        {currentQuestionText && isDebugMode && (
+          <div className={s.demoQuestion} aria-hidden="true">
+            {currentQuestionText}
+          </div>
+        )}
+        {!isDebugMode && captionsEnabled && currentQuestionText && (
+          <div className={s.captionsLine} role="status" aria-live="polite">
+            {currentQuestionText}
+          </div>
         )}
         {progressSteps.length > 0 && (
           <section className={s.roiProgress} aria-label="ROI progress">
@@ -136,7 +174,7 @@ export function DemoShell({
         <RoiReportModal payload={roiPayload} onClose={onCloseForeground} />
       )}
 
-      <ErrorToast message={errorToast} onDismiss={onDismissError} />
+      <OrbAlertDot message={errorToast} onDismiss={onDismissError} />
       <RoiPendingInputToast detail={roiPendingDetail} onDismiss={onDismissRoiPending} />
     </main>
   );
