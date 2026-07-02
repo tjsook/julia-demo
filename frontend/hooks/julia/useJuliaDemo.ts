@@ -59,11 +59,17 @@ export type JuliaDebugStageTranscript = {
   intent: string | null;
 };
 
+export type JuliaStartupTimingMark = {
+  event: string;
+  elapsedMs: number;
+};
+
 type JuliaTtsPlayback = {
   audioBase64: string;
   mimeType: string;
   playIn: JuliaDemoState[];
   autoStartListeningOnEnd?: boolean;
+  source?: "greeting" | "general";
 };
 
 type OpenDocumentOptions = {
@@ -71,8 +77,11 @@ type OpenDocumentOptions = {
   preservePlayback?: boolean;
 };
 
+const GREETING_PLAYBACK_CACHE = new Map<string, JuliaVoicePlaybackResponse>();
+
 export function useJuliaDemo() {
   const { name, email } = useCurrentUser();
+  const isDebugMode = process.env.NEXT_PUBLIC_JULIA_DEBUG_MODE === "true";
   const [state, setState] = useState<JuliaDemoState>("asking-initial-intent");
   const [conversationStage, setConversationStage] =
     useState<GuidedConversationStage>("initial_intent");
@@ -90,8 +99,10 @@ export function useJuliaDemo() {
   const [roiCollectionSession, setRoiCollectionSession] =
     useState<JuliaROICollectionSession | null>(null);
   const [currentQuestionText, setCurrentQuestionText] = useState<string | null>(null);
+  const [startupTimingMarks, setStartupTimingMarks] = useState<JuliaStartupTimingMark[]>([]);
   const [debugStageTranscripts, setDebugStageTranscripts] = useState<JuliaDebugStageTranscript[]>([]);
   const debugEntryIdRef = useRef(0);
+  const startupEpochMsRef = useRef<number | null>(null);
   const confirmationRequestRef = useRef(0);
   const hasPlayedGreetingRef = useRef(false);
   const micAmplitudeRef = useRef(0);
@@ -107,6 +118,23 @@ export function useJuliaDemo() {
     if (!firstToken) return "there";
     return firstToken;
   }, [email, name]);
+
+  const recordStartupTiming = useCallback((event: string) => {
+    if (typeof window === "undefined") return;
+    const now = window.performance.now();
+    if (startupEpochMsRef.current === null) {
+      startupEpochMsRef.current = now;
+    }
+    const elapsedMs = Math.round(now - startupEpochMsRef.current);
+    setStartupTimingMarks((current) => [...current, { event, elapsedMs }].slice(-20));
+    if (isDebugMode) {
+      console.log("julia.startup_timing", {
+        event: "julia.startup_timing",
+        startup_event: event,
+        elapsed_ms: elapsedMs,
+      });
+    }
+  }, [isDebugMode]);
 
   const queueSelectedDocumentConfirmation = useCallback(async (match: JuliaVoiceMatch) => {
     const requestId = confirmationRequestRef.current + 1;
@@ -394,6 +422,7 @@ export function useJuliaDemo() {
   }, [resetRoiCollection]);
 
   useEffect(() => {
+    recordStartupTiming("page_mount");
     if (hasPlayedGreetingRef.current) {
       return;
     }
@@ -404,9 +433,21 @@ export function useJuliaDemo() {
 
     void (async () => {
       try {
-        const response = await postJuliaVoiceGreeting(spokenName);
+        const cacheKey = spokenName.trim().toLowerCase();
+        const cached = GREETING_PLAYBACK_CACHE.get(cacheKey);
+        let response: JuliaVoicePlaybackResponse;
+        if (cached) {
+          response = cached;
+          recordStartupTiming("greeting_cache_hit");
+        } else {
+          recordStartupTiming("greeting_request_start");
+          response = await postJuliaVoiceGreeting(spokenName);
+          recordStartupTiming("greeting_response_received");
+          GREETING_PLAYBACK_CACHE.set(cacheKey, response);
+        }
         const greetingPlayback = playbackFromResponse(response, ["asking-initial-intent"], {
           autoStartListeningOnEnd: true,
+          source: "greeting",
         });
         if (!greetingPlayback) {
           setErrorToast("Julia couldn't play the greeting audio. Click the orb to start.");
@@ -417,7 +458,7 @@ export function useJuliaDemo() {
         setErrorToast(err instanceof Error ? err.message : "Failed to load Julia greeting.");
       }
     })();
-  }, [spokenName]);
+  }, [recordStartupTiming, spokenName]);
 
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
@@ -457,16 +498,30 @@ export function useJuliaDemo() {
 
     const audioUrl = audioUrlFromBase64(ttsPlayback.audioBase64, ttsPlayback.mimeType);
     const audio = new Audio(audioUrl);
+    if (ttsPlayback.source === "greeting") {
+      recordStartupTiming("greeting_audio_play_start");
+    }
     activeTtsAudioRef.current = audio;
     audio.onended = () => {
       if (activeTtsAudioRef.current === audio) {
         activeTtsAudioRef.current = null;
       }
+      if (ttsPlayback.source === "greeting") {
+        recordStartupTiming("greeting_audio_play_end");
+      }
       if (!ttsPlayback.autoStartListeningOnEnd) {
         return;
       }
+      if (ttsPlayback.source === "greeting") {
+        recordStartupTiming("mic_auto_start_request");
+      }
       setState("listening");
-      void voice.startListening();
+      void (async () => {
+        await voice.startListening();
+        if (ttsPlayback.source === "greeting") {
+          recordStartupTiming("mic_ready_listening");
+        }
+      })();
     };
     audio.play().catch((err: unknown) => {
       if (activeTtsAudioRef.current === audio) {
@@ -487,7 +542,7 @@ export function useJuliaDemo() {
       audio.pause();
       URL.revokeObjectURL(audioUrl);
     };
-  }, [state, ttsPlayback, voice]);
+  }, [recordStartupTiming, state, ttsPlayback, voice]);
 
   useEffect(() => {
     if (state === "processing") {
@@ -613,6 +668,7 @@ export function useJuliaDemo() {
     debugDurationSeconds: debugSnapshot.durationSeconds,
     debugRecording: debugSnapshot.recording,
     micAmplitudeRef,
+    startupTimingMarks,
     debugStageTranscripts,
     handleOrbClick,
     openDocument,
@@ -662,7 +718,7 @@ function formatPendingDetail(detail: string, questionText: string | null): strin
 function playbackFromResponse(
   response: JuliaVoiceIntentResponse | JuliaVoicePlaybackResponse,
   playIn: JuliaDemoState[],
-  options: { autoStartListeningOnEnd?: boolean } = {},
+  options: { autoStartListeningOnEnd?: boolean; source?: "greeting" | "general" } = {},
 ): JuliaTtsPlayback | null {
   if (!response.tts_audio_base64 || !response.tts_mime_type) return null;
   return {
@@ -670,6 +726,7 @@ function playbackFromResponse(
     mimeType: response.tts_mime_type,
     playIn,
     autoStartListeningOnEnd: options.autoStartListeningOnEnd,
+    source: options.source ?? "general",
   };
 }
 

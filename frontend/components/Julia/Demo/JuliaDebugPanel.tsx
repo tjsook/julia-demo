@@ -1,6 +1,9 @@
 import s from "../../../styles/julia.module.css";
 import type { JuliaVoiceStopReason } from "../../../hooks/julia/useJuliaVoice";
-import type { JuliaDebugStageTranscript } from "../../../hooks/julia/useJuliaDemo";
+import type {
+  JuliaDebugStageTranscript,
+  JuliaStartupTimingMark,
+} from "../../../hooks/julia/useJuliaDemo";
 
 type JuliaDebugPanelProps = {
   transcript: string | null;
@@ -10,6 +13,7 @@ type JuliaDebugPanelProps = {
   recording: boolean;
   stageTranscripts: JuliaDebugStageTranscript[];
   currentQuestionText: string | null;
+  startupTimingMarks: JuliaStartupTimingMark[];
 };
 
 export function JuliaDebugPanel({
@@ -20,6 +24,7 @@ export function JuliaDebugPanel({
   recording,
   stageTranscripts,
   currentQuestionText,
+  startupTimingMarks,
 }: JuliaDebugPanelProps) {
   if (process.env.NEXT_PUBLIC_JULIA_DEBUG_MODE !== "true") {
     return null;
@@ -70,6 +75,18 @@ export function JuliaDebugPanel({
           <div className={s.juliaDebugTranscript}>
             <div className={s.juliaDebugTranscriptLabel}>Current question</div>
             <pre>{currentQuestionText ?? "n/a"}</pre>
+          </div>
+          <div className={s.juliaDebugTranscript}>
+            <div className={s.juliaDebugTranscriptLabel}>Startup timings (ms)</div>
+            {startupTimingMarks.length === 0 ? (
+              <pre>n/a</pre>
+            ) : (
+              <pre>
+                {startupTimingMarks
+                  .map((mark) => `${mark.event}: ${mark.elapsedMs}`)
+                  .join("\n")}
+              </pre>
+            )}
           </div>
           <div className={s.juliaDebugTranscript}>
             <div className={s.juliaDebugTranscriptLabel}>Transcript</div>
