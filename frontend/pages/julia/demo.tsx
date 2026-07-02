@@ -22,6 +22,7 @@ export default function JuliaDemoPage() {
         documentError={demo.documentError}
         roiPayload={demo.roiPayload}
         roiPendingDetail={demo.roiPendingDetail}
+        currentQuestionText={demo.currentQuestionText}
         onOrbClick={demo.handleOrbClick}
         onSelectMatch={(match) => void demo.openDocument(match)}
         onCloseForeground={demo.closeForeground}
