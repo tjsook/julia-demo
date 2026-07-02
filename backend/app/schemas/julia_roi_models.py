@@ -125,12 +125,22 @@ class JuliaEvidenceVerificationNormalize(BaseModel):
     collapse_whitespace: bool = True
 
 
+class JuliaEvidenceFuzzyFallbackConfig(BaseModel):
+    """Fuzzy evidence-match fallback controls."""
+
+    enabled: bool = False
+    min_overlap_ratio: float = Field(default=0.75, ge=0.0, le=1.0)
+
+
 class JuliaEvidenceVerificationConfig(BaseModel):
     """Pain-point evidence verification controls."""
 
     enabled: bool = True
     min_length_chars: int = Field(ge=1)
     normalize: JuliaEvidenceVerificationNormalize
+    fuzzy_fallback: JuliaEvidenceFuzzyFallbackConfig = Field(
+        default_factory=JuliaEvidenceFuzzyFallbackConfig
+    )
 
 
 class JuliaSanityBand(BaseModel):
