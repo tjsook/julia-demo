@@ -749,6 +749,21 @@ async def voice_roi_followup(
                 detail="I still need the company name to continue.",
                 stage="company",
             )
+        required_numeric = engine.plan_required_fields(
+            matched_pain_points=session_state.matched_pain_points,
+            calibration=calibration,
+        )
+        session_state.required_fields = _merge_unique(
+            ["company_name", "pain_points"],
+            required_numeric,
+        )
+        next_numeric = _next_missing_numeric_field(session_state)
+        if next_numeric is not None:
+            return pending_response(
+                next_field=next_numeric,
+                detail=f"I still need {_field_label(next_numeric)} before running analysis.",
+                stage="numeric_fields",
+            )
         try:
             payload = engine.evaluate_guided_roi(
                 company_name=session_state.company_name,
