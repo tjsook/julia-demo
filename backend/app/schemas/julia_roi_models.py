@@ -8,24 +8,32 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 CONSTANT_SYMBOLS: tuple[str, ...] = (
     "D",
-    "R",
     "Up",
     "Di",
     "Hb",
     "Dr",
     "Lc",
     "Oa",
-    "G",
-    "Fg",
-    "Pr",
 )
 
-INPUT_SYMBOLS: tuple[str, ...] = ("T", "S", "P", "Ld", "Du")
+INPUT_SYMBOLS: tuple[str, ...] = ("T", "S", "P", "Ld", "Du", "R", "minutes_per_order")
+DEFAULTABLE_INPUT_SYMBOLS: tuple[str, ...] = ("S", "P", "Ld", "Du", "R")
 
-EquationId = Literal["E1", "E2", "E3", "E3a", "E3b", "E3c", "E4", "E5"]
-InputSymbol = Literal["T", "S", "P", "Ld", "Du"]
+EquationId = Literal["E1", "E2", "E3", "E3a", "E3b", "E3c", "E5"]
+InputSymbol = Literal["T", "S", "P", "Ld", "Du", "R", "minutes_per_order"]
 InputSource = Literal["rep", "rep_qualitative", "derived", "default", "user_approved_default"]
-ROIPendingField = Literal["fleet_size", "company_name", "pain_points", "T", "S", "P", "Ld", "Du"]
+ROIPendingField = Literal[
+    "fleet_size",
+    "company_name",
+    "pain_points",
+    "T",
+    "S",
+    "P",
+    "Ld",
+    "Du",
+    "R",
+    "minutes_per_order",
+]
 ROICollectionStage = Literal[
     "intent",
     "company",
@@ -204,7 +212,7 @@ class JuliaCalibrationModel(BaseModel):
         if missing_constants:
             raise ValueError(f"Calibration constants missing required symbols: {missing_constants}.")
 
-        missing_rules = [symbol for symbol in INPUT_SYMBOLS[1:] if symbol not in self.derivation_rules]
+        missing_rules = [symbol for symbol in DEFAULTABLE_INPUT_SYMBOLS if symbol not in self.derivation_rules]
         if missing_rules:
             raise ValueError(f"Derivation rules missing required symbols: {missing_rules}.")
 
@@ -260,6 +268,8 @@ class JuliaExtractionVariables(BaseModel):
     P: JuliaExtractedValue | None = None
     Ld: JuliaExtractedValue | None = None
     Du: JuliaExtractedDuValue | None = None
+    R: JuliaExtractedValue | None = None
+    minutes_per_order: JuliaExtractedValue | None = None
 
 
 class JuliaPainPointMatch(BaseModel):

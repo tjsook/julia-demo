@@ -292,8 +292,10 @@ class JuliaOpenAIService:
                         "P": _positive_number_var_schema(max_value=5000),
                         "Ld": _positive_number_var_schema(max_value=10000),
                         "Du": _qualitative_fraction_var_schema(bucket_enum=du_bucket_enum),
+                        "R": _positive_number_var_schema(max_value=50000),
+                        "minutes_per_order": _positive_number_var_schema(max_value=120),
                     },
-                    "required": ["T", "S", "P", "Ld", "Du"],
+                    "required": ["T", "S", "P", "Ld", "Du", "R", "minutes_per_order"],
                 },
             },
             "required": ["company_name", "pain_points", "variables"],
@@ -370,6 +372,14 @@ class JuliaOpenAIService:
                     "- '150 loads a day' -> Ld = {'value': 150, 'confidence': 0.95}\n"
                     "- 'they run about 150 loads daily' -> Ld = {'value': 150, 'confidence': 0.90}\n"
                     "- 'lots of loads' -> Ld = null\n"
+                    "R (average revenue per load, USD):\n"
+                    "- '$2,300 per load' -> R = {'value': 2300, 'confidence': 0.95}\n"
+                    "- 'roughly 2500 a load' -> R = {'value': 2500, 'confidence': 0.85}\n"
+                    "- 'not sure on revenue per load' -> R = null\n"
+                    "minutes_per_order (manual order-entry minutes per load/order):\n"
+                    "- 'three minutes per order' -> minutes_per_order = {'value': 3, 'confidence': 0.95}\n"
+                    "- 'about 2.5 minutes per load' -> minutes_per_order = {'value': 2.5, 'confidence': 0.85}\n"
+                    "- 'order entry is slow' -> minutes_per_order = null\n"
                     "Du (% detention uncaptured, MUST be decimal fraction 0-1 OR a qualitative_tag):\n"
                     "Numeric:\n"
                     "- '70 percent uncaptured' -> Du = {'value': 0.70, 'qualitative_tag': null, 'confidence': 0.95}\n"
@@ -439,6 +449,8 @@ class JuliaOpenAIService:
             P=_accept_numeric(structured.variables.P, numeric_threshold),
             Ld=_accept_numeric(structured.variables.Ld, numeric_threshold),
             Du=_accept_qualitative_fraction(structured.variables.Du, numeric_threshold),
+            R=_accept_numeric(structured.variables.R, numeric_threshold),
+            minutes_per_order=_accept_numeric(structured.variables.minutes_per_order, numeric_threshold),
         )
 
         return JuliaROIExtractionResult(
@@ -545,7 +557,7 @@ class JuliaOpenAIService:
         calibration: JuliaCalibrationModel,
     ) -> JuliaROIFollowupFieldResult:
         """Extract one expected follow-up field answer with classification status."""
-        if expected_field not in {"T", "S", "P", "Ld", "Du"}:
+        if expected_field not in {"T", "S", "P", "Ld", "Du", "R", "minutes_per_order"}:
             raise JuliaOpenAIError(
                 "followup_extraction_failed",
                 f"Unsupported follow-up field: {expected_field}.",

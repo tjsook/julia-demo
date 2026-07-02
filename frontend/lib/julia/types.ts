@@ -47,14 +47,14 @@ export interface JuliaVoiceMatch {
   title: string;
 }
 
-export type JuliaROIInputSymbol = "T" | "S" | "P" | "Ld" | "Du";
+export type JuliaROIInputSymbol = "T" | "S" | "P" | "Ld" | "Du" | "R" | "minutes_per_order";
 export type JuliaROIInputSource =
   | "rep"
   | "rep_qualitative"
   | "derived"
   | "default"
   | "user_approved_default";
-export type JuliaROIEquationId = "E1" | "E2" | "E3" | "E3a" | "E3b" | "E3c" | "E4" | "E5";
+export type JuliaROIEquationId = "E1" | "E2" | "E3" | "E3a" | "E3b" | "E3c" | "E5";
 
 export interface JuliaROIPainPointMatch {
   id: string;
@@ -117,7 +117,9 @@ export type JuliaROIPendingField =
   | "S"
   | "P"
   | "Ld"
-  | "Du";
+  | "Du"
+  | "R"
+  | "minutes_per_order";
 
 export type JuliaROICollectionStage =
   | "intent"
