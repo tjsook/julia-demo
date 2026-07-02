@@ -374,14 +374,19 @@ export function useJuliaDemo() {
     setState("idle");
   }, [appendDebugStageTranscript, expectedField]);
 
-  const voice = useJuliaVoice({
+  const {
+    startListening,
+    stopAndSubmit,
+    cancelListening: cancelVoiceListening,
+    debugSnapshot,
+  } = useJuliaVoice({
     onIntent: handleIntent,
     onError: handleError,
     onAmplitude: useCallback((level: number) => {
       micAmplitudeRef.current = level;
     }, []),
   });
-  const debugSnapshot: JuliaVoiceDebugSnapshot = voice.debugSnapshot;
+  const typedDebugSnapshot: JuliaVoiceDebugSnapshot = debugSnapshot;
 
   const submitFollowup: JuliaVoiceSubmitter = useCallback(async (recording) => {
     if (!expectedField) {
@@ -403,19 +408,19 @@ export function useJuliaDemo() {
       state === "roi-pending-input"
     ) {
       setState("listening");
-      void voice.startListening();
+      void startListening();
       return;
     }
 
     if (state === "listening") {
       setState("processing");
       const submitter = conversationStage === "initial_intent" ? undefined : submitFollowup;
-      void voice.stopAndSubmit(submitter);
+      void stopAndSubmit(submitter);
     }
-  }, [conversationStage, state, submitFollowup, voice]);
+  }, [conversationStage, startListening, state, stopAndSubmit, submitFollowup]);
 
   const cancelListening = useCallback(() => {
-    voice.cancelListening();
+    cancelVoiceListening();
     if (conversationStage === "company") {
       setState("collecting-company-name");
       return;
@@ -429,7 +434,7 @@ export function useJuliaDemo() {
       return;
     }
     setState("idle");
-  }, [conversationStage, voice]);
+  }, [cancelVoiceListening, conversationStage]);
 
   const closeForeground = useCallback(() => {
     confirmationRequestRef.current += 1;
@@ -558,7 +563,7 @@ export function useJuliaDemo() {
       }
       setState("listening");
       void (async () => {
-        await voice.startListening();
+        await startListening();
         if (ttsPlayback.source === "greeting") {
           recordStartupTiming("mic_ready_listening");
         }
@@ -585,7 +590,7 @@ export function useJuliaDemo() {
       audio.pause();
       URL.revokeObjectURL(audioUrl);
     };
-  }, [recordStartupTiming, state, ttsPlayback, voice]);
+  }, [recordStartupTiming, startListening, state, ttsPlayback]);
 
   useEffect(() => {
     if (state === "processing") {
@@ -709,11 +714,11 @@ export function useJuliaDemo() {
     roiProgressStep,
     requiredNumericCount: requiredNumericFields.length,
     collectedNumericCount,
-    debugTranscript: debugSnapshot.transcript,
-    debugStopReason: debugSnapshot.stopReason,
-    debugAudioSizeMb: debugSnapshot.audioSizeMb,
-    debugDurationSeconds: debugSnapshot.durationSeconds,
-    debugRecording: debugSnapshot.recording,
+    debugTranscript: typedDebugSnapshot.transcript,
+    debugStopReason: typedDebugSnapshot.stopReason,
+    debugAudioSizeMb: typedDebugSnapshot.audioSizeMb,
+    debugDurationSeconds: typedDebugSnapshot.durationSeconds,
+    debugRecording: typedDebugSnapshot.recording,
     micAmplitudeRef,
     startupTimingMarks,
     debugStageTranscripts,
