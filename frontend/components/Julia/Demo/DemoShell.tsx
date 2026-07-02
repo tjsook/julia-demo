@@ -24,6 +24,7 @@ type DemoShellProps = {
   micAmplitudeRef: MutableRefObject<number>;
   isStartupLocked: boolean;
   terminalRecognizedLines: JuliaTerminalRecognizedLine[];
+  terminalCancelMessage: string | null;
   currentQuestionText: string | null;
   activeSubtitleText: string | null;
   showProcessingSplash: boolean;
@@ -66,6 +67,7 @@ export function DemoShell({
   micAmplitudeRef,
   isStartupLocked,
   terminalRecognizedLines,
+  terminalCancelMessage,
   currentQuestionText,
   activeSubtitleText,
   showProcessingSplash,
@@ -100,6 +102,7 @@ export function DemoShell({
         requiredNumericCount,
         collectedNumericCount,
         terminalRecognizedLines,
+        terminalCancelMessage,
         currentQuestionText,
         roiPendingDetail,
         errorToast,
@@ -212,6 +215,7 @@ function buildShowConsoleLines({
   requiredNumericCount,
   collectedNumericCount,
   terminalRecognizedLines,
+  terminalCancelMessage,
   currentQuestionText,
   roiPendingDetail,
   errorToast,
@@ -224,6 +228,7 @@ function buildShowConsoleLines({
   requiredNumericCount: number;
   collectedNumericCount: number;
   terminalRecognizedLines: JuliaTerminalRecognizedLine[];
+  terminalCancelMessage: string | null;
   currentQuestionText: string | null;
   roiPendingDetail: string | null;
   errorToast: string | null;
@@ -247,6 +252,9 @@ function buildShowConsoleLines({
     lines.push({ prefix: "[prompt]", message: compactConsoleText(currentQuestionText) });
   } else if (state === "idle") {
     lines.push({ prefix: "[ready]", message: "awaiting voice command" });
+  }
+  if (terminalCancelMessage) {
+    lines.push({ prefix: "[cancel]", message: compactConsoleText(terminalCancelMessage) });
   }
   if (roiPendingDetail) {
     lines.push({ prefix: "[input]", message: compactConsoleText(roiPendingDetail) });

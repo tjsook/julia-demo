@@ -5,6 +5,7 @@ import {
   postJuliaRoiFollowup,
   postJuliaVoiceDocumentConfirmation,
   postJuliaVoiceGreeting,
+  postJuliaVoiceIntent,
 } from "../../lib/julia/api";
 import { getDashboardDisplayName, useCurrentUser } from "../../lib/auth";
 import {
@@ -115,6 +116,7 @@ export function useJuliaDemo() {
   const [roiCollectionSession, setRoiCollectionSession] =
     useState<JuliaROICollectionSession | null>(null);
   const [terminalRecognizedLines, setTerminalRecognizedLines] = useState<JuliaTerminalRecognizedLine[]>([]);
+  const [terminalCancelMessage, setTerminalCancelMessage] = useState<string | null>(null);
   const [currentQuestionText, setCurrentQuestionText] = useState<string | null>(null);
   const [startupTimingMarks, setStartupTimingMarks] = useState<JuliaStartupTimingMark[]>([]);
   const [debugStageTranscripts, setDebugStageTranscripts] = useState<JuliaDebugStageTranscript[]>([]);
@@ -128,6 +130,7 @@ export function useJuliaDemo() {
   const fillerTimeoutRef = useRef<number | null>(null);
   const usedFillerSetRef = useRef<Set<string>>(new Set());
   const hasPlayedFillerInProcessingRef = useRef(false);
+  const cancelMessageTimeoutRef = useRef<number | null>(null);
 
   const spokenName = useMemo(() => {
     const displayName = getDashboardDisplayName(name, email);
@@ -267,9 +270,22 @@ export function useJuliaDemo() {
     setDocumentError(null);
 
     if (isSilentVoiceIntent(response)) {
+      const wasCancelTranscript = isCancelTranscript(response.transcript);
       logSilentVoiceIntent(response);
       resetRoiCollection();
+      setRoiPayload(null);
+      setRoiPendingDetail(null);
       setCurrentQuestionText("What can I do for you today?");
+      setTtsPlayback(
+        playbackFromResponse(response, ["asking-initial-intent"], {
+          subtitleText: wasCancelTranscript
+            ? "Okay, cancelled. What can I do for you today?"
+            : "What can I do for you today?",
+        }),
+      );
+      if (wasCancelTranscript) {
+        setTerminalCancelMessage("voice cancel received");
+      }
       setState("asking-initial-intent");
       return;
     }
@@ -405,15 +421,18 @@ export function useJuliaDemo() {
   });
   const typedDebugSnapshot: JuliaVoiceDebugSnapshot = debugSnapshot;
 
-  const submitFollowup: JuliaVoiceSubmitter = useCallback(async (recording) => {
+  const submitVoice: JuliaVoiceSubmitter = useCallback(async (recording, options) => {
+    if (conversationStage === "initial_intent") {
+      return postJuliaVoiceIntent(recording, options);
+    }
     if (!expectedField) {
       throw new Error("ROI follow-up submit is missing expectedField.");
     }
     if (!roiCollectionSession) {
       throw new Error("ROI follow-up submit is missing session state.");
     }
-    return postJuliaRoiFollowup(recording, expectedField, roiCollectionSession);
-  }, [expectedField, roiCollectionSession]);
+    return postJuliaRoiFollowup(recording, expectedField, roiCollectionSession, options);
+  }, [conversationStage, expectedField, roiCollectionSession]);
 
   const handleOrbClick = useCallback(() => {
     if (isStartupLocked) return;
@@ -432,10 +451,9 @@ export function useJuliaDemo() {
 
     if (state === "listening") {
       setState("processing");
-      const submitter = conversationStage === "initial_intent" ? undefined : submitFollowup;
-      void stopAndSubmit(submitter);
+      void stopAndSubmit(submitVoice);
     }
-  }, [conversationStage, isStartupLocked, startListening, state, stopAndSubmit, submitFollowup]);
+  }, [isStartupLocked, startListening, state, stopAndSubmit, submitVoice]);
 
   const cancelListening = useCallback(() => {
     cancelVoiceListening();
@@ -454,6 +472,38 @@ export function useJuliaDemo() {
     setState("idle");
   }, [cancelVoiceListening, conversationStage]);
 
+  const stopAllPlayback = useCallback(() => {
+    if (fillerTimeoutRef.current !== null) {
+      window.clearTimeout(fillerTimeoutRef.current);
+      fillerTimeoutRef.current = null;
+    }
+    if (activeFillerAudioRef.current) {
+      activeFillerAudioRef.current.onended = null;
+      activeFillerAudioRef.current.onerror = null;
+      activeFillerAudioRef.current.pause();
+      activeFillerAudioRef.current = null;
+    }
+    if (activeTtsAudioRef.current) {
+      activeTtsAudioRef.current.onended = null;
+      activeTtsAudioRef.current.pause();
+      activeTtsAudioRef.current = null;
+    }
+    setTtsPlayback(null);
+    setActiveSubtitleText(null);
+  }, []);
+
+  const cancelActiveWork = useCallback((message: string) => {
+    cancelListening();
+    confirmationRequestRef.current += 1;
+    stopAllPlayback();
+    resetRoiCollection();
+    setRoiPayload(null);
+    setRoiPendingDetail(null);
+    setCurrentQuestionText("What can I do for you today?");
+    setTerminalCancelMessage(message);
+    setState("asking-initial-intent");
+  }, [cancelListening, resetRoiCollection, stopAllPlayback]);
+
   const closeForeground = useCallback(() => {
     confirmationRequestRef.current += 1;
     setState("idle");
@@ -466,6 +516,7 @@ export function useJuliaDemo() {
     setDocumentLoading(false);
     setRoiPayload(null);
     setCurrentQuestionText(null);
+    setTerminalCancelMessage(null);
     setDebugStageTranscripts([]);
     debugEntryIdRef.current = 0;
     resetRoiCollection();
@@ -526,28 +577,41 @@ export function useJuliaDemo() {
   }, [state]);
 
   useEffect(() => {
-    function handleKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape" && state === "listening") {
-        event.preventDefault();
-        cancelListening();
-        return;
+    if (!terminalCancelMessage) return;
+    if (cancelMessageTimeoutRef.current !== null) {
+      window.clearTimeout(cancelMessageTimeoutRef.current);
+    }
+    cancelMessageTimeoutRef.current = window.setTimeout(() => {
+      cancelMessageTimeoutRef.current = null;
+      setTerminalCancelMessage(null);
+    }, 2200);
+    return () => {
+      if (cancelMessageTimeoutRef.current !== null) {
+        window.clearTimeout(cancelMessageTimeoutRef.current);
+        cancelMessageTimeoutRef.current = null;
       }
-      if (event.key === "Escape") {
-        resetRoiCollection();
-        setCurrentQuestionText(null);
-        if (
-          state === "collecting-company-name" ||
-          state === "collecting-pain-points" ||
-          state === "collecting-roi-field"
-        ) {
-          setState("idle");
-        }
+    };
+  }, [terminalCancelMessage]);
+
+  useEffect(() => {
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key !== "Escape") return;
+      if (
+        state === "listening" ||
+        state === "processing" ||
+        state === "collecting-company-name" ||
+        state === "collecting-pain-points" ||
+        state === "collecting-roi-field" ||
+        state === "roi-pending-input"
+      ) {
+        event.preventDefault();
+        cancelActiveWork("request aborted");
       }
     }
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [cancelListening, resetRoiCollection, state]);
+  }, [cancelActiveWork, state]);
 
   useEffect(() => {
     if (!ttsPlayback || !ttsPlayback.playIn.includes(state)) {
@@ -704,6 +768,10 @@ export function useJuliaDemo() {
 
   useEffect(() => {
     return () => {
+      if (cancelMessageTimeoutRef.current !== null) {
+        window.clearTimeout(cancelMessageTimeoutRef.current);
+        cancelMessageTimeoutRef.current = null;
+      }
       if (fillerTimeoutRef.current !== null) {
         window.clearTimeout(fillerTimeoutRef.current);
         fillerTimeoutRef.current = null;
@@ -736,6 +804,7 @@ export function useJuliaDemo() {
     roiPendingDetail,
     roiCollectionSession,
     terminalRecognizedLines,
+    terminalCancelMessage,
     currentQuestionText,
     activeSubtitleText,
     showProcessingSplash: state === "processing" && activeSubtitleText === null,
@@ -755,6 +824,7 @@ export function useJuliaDemo() {
     handleOrbClick,
     openDocument,
     cancelListening,
+    cancelActiveWork,
     closeForeground,
     dismissError: () => setErrorToast(null),
     dismissRoiPending: () => setRoiPendingDetail(null),
@@ -892,4 +962,23 @@ function formatCompactNumber(value: number): string {
 
 function formatConfidence(value: number): string {
   return value.toFixed(2);
+}
+
+function isCancelTranscript(transcript: string): boolean {
+  const normalized = transcript.trim().toLowerCase();
+  if (!normalized) return false;
+  if (
+    normalized.includes("cancel that")
+    || normalized.includes("never mind")
+    || normalized.includes("nevermind")
+    || normalized.includes("scratch that")
+    || normalized === "stop"
+  ) {
+    return true;
+  }
+  if (!normalized.startsWith("wait")) return false;
+  const remainder = normalized.replace(/^wait[\s,!.?-]*/, "");
+  if (!remainder) return true;
+  const words = remainder.split(/\s+/).filter(Boolean);
+  return words.length <= 3 && !/\d/.test(remainder);
 }

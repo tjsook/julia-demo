@@ -16,6 +16,7 @@ import type {
 const BASE_URL =
   process.env.NEXT_PUBLIC_API_URL?.replace(/\/$/, "") ?? "http://localhost:8000";
 const JULIA_CACHE_PREFIX = "/julia/";
+type JuliaRequestOptions = { signal?: AbortSignal };
 
 export class JuliaApiError extends Error {
   code: string;
@@ -125,6 +126,7 @@ export async function fetchJuliaSignedUrl(documentId: string): Promise<JuliaSign
 
 export async function postJuliaVoiceIntent(
   recording: JuliaRecordedAudio,
+  options: JuliaRequestOptions = {},
 ): Promise<JuliaVoiceIntentResponse> {
   const headers = await getDashboardAuthHeaders();
   const form = new FormData();
@@ -133,11 +135,15 @@ export async function postJuliaVoiceIntent(
     method: "POST",
     headers,
     body: form,
+    signal: options.signal,
   });
   return parseJuliaJson<JuliaVoiceIntentResponse>(res, "Failed to process Julia voice intent.");
 }
 
-export async function postJuliaVoiceGreeting(firstName?: string): Promise<JuliaVoicePlaybackResponse> {
+export async function postJuliaVoiceGreeting(
+  firstName?: string,
+  options: JuliaRequestOptions = {},
+): Promise<JuliaVoicePlaybackResponse> {
   const headers = await getDashboardAuthHeaders();
   const form = new FormData();
   if (firstName && firstName.trim()) {
@@ -147,6 +153,7 @@ export async function postJuliaVoiceGreeting(firstName?: string): Promise<JuliaV
     method: "POST",
     headers,
     body: form,
+    signal: options.signal,
   });
   return parseJuliaJson<JuliaVoicePlaybackResponse>(res, "Failed to create Julia greeting prompt.");
 }
@@ -155,6 +162,7 @@ export async function postJuliaRoiFollowup(
   recording: JuliaRecordedAudio,
   expectedField: string,
   session: JuliaROICollectionSession,
+  options: JuliaRequestOptions = {},
 ): Promise<JuliaVoiceIntentResponse> {
   const headers = await getDashboardAuthHeaders();
   const form = new FormData();
@@ -165,6 +173,7 @@ export async function postJuliaRoiFollowup(
     method: "POST",
     headers,
     body: form,
+    signal: options.signal,
   });
   return parseJuliaJson<JuliaVoiceIntentResponse>(res, "Failed to process Julia ROI follow-up.");
 }
