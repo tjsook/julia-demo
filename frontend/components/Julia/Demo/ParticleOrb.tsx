@@ -5,6 +5,7 @@ type OrbMode = "idle" | "listening" | "processing" | "dimmed" | "alert";
 type ParticleOrbProps = {
   mode: OrbMode;
   amplitude?: number;
+  amplitudeRef?: { current: number };
   size?: number;
   onClick?: () => void;
   disabled?: boolean;
@@ -31,6 +32,7 @@ const GOLDEN = Math.PI * (3 - Math.sqrt(5));
 export function ParticleOrb({
   mode,
   amplitude = 0,
+  amplitudeRef: externalAmplitudeSource,
   size = 380,
   onClick,
   disabled = false,
@@ -39,7 +41,8 @@ export function ParticleOrb({
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const rafRef = useRef<number | null>(null);
   const modeRef = useRef<OrbMode>(mode);
-  const amplitudeRef = useRef<number>(amplitude);
+  const amplitudeValueRef = useRef<number>(amplitude);
+  const externalAmplitudeRef = useRef<{ current: number } | null>(externalAmplitudeSource ?? null);
   const pointsRef = useRef<OrbPoint[]>([]);
   const noiseRef = useRef<(x: number, y: number, z: number) => number>(() => 0);
   const phaseRef = useRef(0);
@@ -57,8 +60,12 @@ export function ParticleOrb({
   }, [mode]);
 
   useEffect(() => {
-    amplitudeRef.current = clamp01(amplitude);
+    amplitudeValueRef.current = clamp01(amplitude);
   }, [amplitude]);
+
+  useEffect(() => {
+    externalAmplitudeRef.current = externalAmplitudeSource ?? null;
+  }, [externalAmplitudeSource]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -90,7 +97,8 @@ export function ParticleOrb({
 
     function renderFrame() {
       const currentMode = modeRef.current;
-      const currentAmplitude = clamp01(amplitudeRef.current);
+      const sampledAmplitude = externalAmplitudeRef.current?.current ?? amplitudeValueRef.current;
+      const currentAmplitude = clamp01(sampledAmplitude);
       const targets = modeTargets(currentMode, currentAmplitude);
       const visuals = visualRef.current;
       const lerpStrength = 0.12;

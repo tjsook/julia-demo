@@ -1,3 +1,5 @@
+import type { MutableRefObject } from "react";
+
 import type { JuliaDemoState } from "../../../hooks/julia/useJuliaDemo";
 import type { JuliaROIAnalysisPayload, JuliaVoiceMatch } from "../../../lib/julia/types";
 import s from "../../../styles/julia.module.css";
@@ -19,6 +21,7 @@ type DemoShellProps = {
   documentError: string | null;
   roiPayload: JuliaROIAnalysisPayload | null;
   roiPendingDetail: string | null;
+  micAmplitudeRef: MutableRefObject<number>;
   currentQuestionText: string | null;
   roiProgressStep: "company" | "pain_points" | "numeric_fields" | "complete" | null;
   requiredNumericCount: number;
@@ -55,6 +58,7 @@ export function DemoShell({
   documentError,
   roiPayload,
   roiPendingDetail,
+  micAmplitudeRef,
   currentQuestionText,
   roiProgressStep,
   requiredNumericCount,
@@ -89,6 +93,7 @@ export function DemoShell({
         {!isDebugMode && <CaptionsToggle enabled={captionsEnabled} onToggle={toggleCaptions} />}
         <ParticleOrb
           mode={orbMode}
+          amplitudeRef={micAmplitudeRef}
           onClick={onOrbClick}
           size={380}
           className={s.particleOrbButton}

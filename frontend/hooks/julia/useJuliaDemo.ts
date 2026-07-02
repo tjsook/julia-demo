@@ -93,6 +93,7 @@ export function useJuliaDemo() {
   const debugEntryIdRef = useRef(0);
   const confirmationRequestRef = useRef(0);
   const hasPlayedGreetingRef = useRef(false);
+  const micAmplitudeRef = useRef(0);
 
   const spokenName = useMemo(() => {
     const displayName = getDashboardDisplayName(name, email);
@@ -311,6 +312,9 @@ export function useJuliaDemo() {
   const voice = useJuliaVoice({
     onIntent: handleIntent,
     onError: handleError,
+    onAmplitude: useCallback((level: number) => {
+      micAmplitudeRef.current = level;
+    }, []),
   });
   const debugSnapshot: JuliaVoiceDebugSnapshot = voice.debugSnapshot;
 
@@ -479,6 +483,7 @@ export function useJuliaDemo() {
     debugAudioSizeMb: debugSnapshot.audioSizeMb,
     debugDurationSeconds: debugSnapshot.durationSeconds,
     debugRecording: debugSnapshot.recording,
+    micAmplitudeRef,
     debugStageTranscripts,
     handleOrbClick,
     openDocument,
