@@ -25,6 +25,8 @@ type DemoShellProps = {
   micAmplitudeRef: MutableRefObject<number>;
   currentQuestionText: string | null;
   activeSubtitleText: string | null;
+  showProcessingSplash: boolean;
+  processingSplashLine: string;
   roiProgressStep: "company" | "pain_points" | "numeric_fields" | "complete" | null;
   requiredNumericCount: number;
   collectedNumericCount: number;
@@ -63,6 +65,8 @@ export function DemoShell({
   micAmplitudeRef,
   currentQuestionText,
   activeSubtitleText,
+  showProcessingSplash,
+  processingSplashLine,
   roiProgressStep,
   requiredNumericCount,
   collectedNumericCount,
@@ -129,6 +133,11 @@ export function DemoShell({
         {!isDebugMode && captionsEnabled && activeSubtitleText && (
           <div className={s.captionsLine} aria-hidden="true">
             {activeSubtitleText}
+          </div>
+        )}
+        {!isDebugMode && showProcessingSplash && !isDimmed && (
+          <div className={s.processingSplash} aria-hidden="true">
+            <span>&gt;</span> {processingSplashLine}
           </div>
         )}
         {progressSteps.length > 0 && (

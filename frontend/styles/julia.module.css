@@ -466,6 +466,21 @@
   pointer-events: none;
 }
 
+.processingSplash {
+  position: absolute;
+  left: 50%;
+  bottom: 58px;
+  transform: translateX(-50%);
+  width: min(520px, calc(100vw - 64px));
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 12px;
+  font-weight: 560;
+  letter-spacing: 0.03em;
+  font-family: "SFMono-Regular", Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  text-align: left;
+  pointer-events: none;
+}
+
 .orbAlertDot {
   position: absolute;
   top: 68px;
@@ -1281,6 +1296,12 @@
     font-size: 11px;
     width: calc(100vw - 34px);
     bottom: 18px;
+  }
+
+  .processingSplash {
+    width: calc(100vw - 40px);
+    bottom: 46px;
+    font-size: 11px;
   }
 
   .demoHint {

@@ -79,6 +79,12 @@ type OpenDocumentOptions = {
 };
 
 const GREETING_PLAYBACK_CACHE = new Map<string, JuliaVoicePlaybackResponse>();
+const PROCESSING_SPLASH_LINES = [
+  "syncing transcript",
+  "matching pain signals",
+  "resolving required fields",
+  "building ROI model",
+] as const;
 
 export function useJuliaDemo() {
   const { name, email } = useCurrentUser();
@@ -93,6 +99,7 @@ export function useJuliaDemo() {
   const [lastVoiceResponse, setLastVoiceResponse] = useState<JuliaVoiceIntentResponse | null>(null);
   const [ttsPlayback, setTtsPlayback] = useState<JuliaTtsPlayback | null>(null);
   const [activeSubtitleText, setActiveSubtitleText] = useState<string | null>(null);
+  const [processingSplashIndex, setProcessingSplashIndex] = useState(0);
   const [documentUrl, setDocumentUrl] = useState<string | null>(null);
   const [documentLoading, setDocumentLoading] = useState(false);
   const [documentError, setDocumentError] = useState<string | null>(null);
@@ -482,6 +489,17 @@ export function useJuliaDemo() {
   }, [recordStartupTiming, spokenName]);
 
   useEffect(() => {
+    if (state !== "processing") {
+      setProcessingSplashIndex(0);
+      return;
+    }
+    const intervalId = window.setInterval(() => {
+      setProcessingSplashIndex((current) => (current + 1) % PROCESSING_SPLASH_LINES.length);
+    }, 1100);
+    return () => window.clearInterval(intervalId);
+  }, [state]);
+
+  useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
       if (event.key === "Escape" && state === "listening") {
         event.preventDefault();
@@ -686,6 +704,8 @@ export function useJuliaDemo() {
     roiCollectionSession,
     currentQuestionText,
     activeSubtitleText,
+    showProcessingSplash: state === "processing" && activeSubtitleText === null,
+    processingSplashLine: PROCESSING_SPLASH_LINES[processingSplashIndex],
     roiProgressStep,
     requiredNumericCount: requiredNumericFields.length,
     collectedNumericCount,

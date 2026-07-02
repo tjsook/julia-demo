@@ -25,6 +25,8 @@ export default function JuliaDemoPage() {
         micAmplitudeRef={demo.micAmplitudeRef}
         currentQuestionText={demo.currentQuestionText}
         activeSubtitleText={demo.activeSubtitleText}
+        showProcessingSplash={demo.showProcessingSplash}
+        processingSplashLine={demo.processingSplashLine}
         roiProgressStep={demo.roiProgressStep}
         requiredNumericCount={demo.requiredNumericCount}
         collectedNumericCount={demo.collectedNumericCount}
