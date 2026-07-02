@@ -22,6 +22,7 @@ type DemoShellProps = {
   roiPayload: JuliaROIAnalysisPayload | null;
   roiPendingDetail: string | null;
   micAmplitudeRef: MutableRefObject<number>;
+  isStartupLocked: boolean;
   currentQuestionText: string | null;
   activeSubtitleText: string | null;
   showProcessingSplash: boolean;
@@ -62,6 +63,7 @@ export function DemoShell({
   roiPayload,
   roiPendingDetail,
   micAmplitudeRef,
+  isStartupLocked,
   currentQuestionText,
   activeSubtitleText,
   showProcessingSplash,
@@ -121,7 +123,7 @@ export function DemoShell({
           onClick={onOrbClick}
           size={orbSize}
           className={s.particleOrbButton}
-          disabled={state === "processing" || isDimmed}
+          disabled={isStartupLocked || state === "processing" || isDimmed}
         />
         {isDebugMode && !showConsole && <div className={s.demoStatus}>{statusLabel[state]}</div>}
         {interactionHint && !showConsole && <div className={s.demoHint}>{interactionHint}</div>}

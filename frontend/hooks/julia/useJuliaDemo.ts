@@ -99,6 +99,7 @@ export function useJuliaDemo() {
   const [lastVoiceResponse, setLastVoiceResponse] = useState<JuliaVoiceIntentResponse | null>(null);
   const [ttsPlayback, setTtsPlayback] = useState<JuliaTtsPlayback | null>(null);
   const [activeSubtitleText, setActiveSubtitleText] = useState<string | null>(null);
+  const [isStartupLocked, setIsStartupLocked] = useState(true);
   const [processingSplashIndex, setProcessingSplashIndex] = useState(0);
   const [documentUrl, setDocumentUrl] = useState<string | null>(null);
   const [documentLoading, setDocumentLoading] = useState(false);
@@ -399,6 +400,7 @@ export function useJuliaDemo() {
   }, [expectedField, roiCollectionSession]);
 
   const handleOrbClick = useCallback(() => {
+    if (isStartupLocked) return;
     if (
       state === "idle" ||
       state === "asking-initial-intent" ||
@@ -417,7 +419,7 @@ export function useJuliaDemo() {
       const submitter = conversationStage === "initial_intent" ? undefined : submitFollowup;
       void stopAndSubmit(submitter);
     }
-  }, [conversationStage, startListening, state, stopAndSubmit, submitFollowup]);
+  }, [conversationStage, isStartupLocked, startListening, state, stopAndSubmit, submitFollowup]);
 
   const cancelListening = useCallback(() => {
     cancelVoiceListening();
@@ -461,6 +463,7 @@ export function useJuliaDemo() {
     hasPlayedGreetingRef.current = true;
     const greetingText = `Hey ${spokenName}, what can I do for you today?`;
     setCurrentQuestionText(greetingText);
+    setIsStartupLocked(true);
     setState("asking-initial-intent");
 
     void (async () => {
@@ -483,11 +486,13 @@ export function useJuliaDemo() {
           subtitleText: greetingText,
         });
         if (!greetingPlayback) {
+          setIsStartupLocked(false);
           setErrorToast("Julia couldn't play the greeting audio. Click the orb to start.");
           return;
         }
         setTtsPlayback(greetingPlayback);
       } catch (err) {
+        setIsStartupLocked(false);
         setErrorToast(err instanceof Error ? err.message : "Failed to load Julia greeting.");
       }
     })();
@@ -556,6 +561,9 @@ export function useJuliaDemo() {
       }
       setActiveSubtitleText(null);
       if (!ttsPlayback.autoStartListeningOnEnd) {
+        if (ttsPlayback.source === "greeting") {
+          setIsStartupLocked(false);
+        }
         return;
       }
       if (ttsPlayback.source === "greeting") {
@@ -566,6 +574,7 @@ export function useJuliaDemo() {
         await startListening();
         if (ttsPlayback.source === "greeting") {
           recordStartupTiming("mic_ready_listening");
+          setIsStartupLocked(false);
         }
       })();
     };
@@ -578,6 +587,9 @@ export function useJuliaDemo() {
         error: err instanceof Error ? err.message : "Audio playback failed.",
       });
       setActiveSubtitleText(null);
+      if (ttsPlayback.source === "greeting") {
+        setIsStartupLocked(false);
+      }
       setErrorToast("Julia couldn't play that prompt. Click the orb to continue.");
     });
 
@@ -720,6 +732,7 @@ export function useJuliaDemo() {
     debugDurationSeconds: typedDebugSnapshot.durationSeconds,
     debugRecording: typedDebugSnapshot.recording,
     micAmplitudeRef,
+    isStartupLocked,
     startupTimingMarks,
     debugStageTranscripts,
     handleOrbClick,
