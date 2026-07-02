@@ -596,6 +596,15 @@ export function useJuliaDemo() {
 
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
+      if (
+        event.code === "Space"
+        && !event.repeat
+        && !isTypingTarget(event.target)
+      ) {
+        event.preventDefault();
+        handleOrbClick();
+        return;
+      }
       if (event.key !== "Escape") return;
       if (
         state === "listening" ||
@@ -612,7 +621,7 @@ export function useJuliaDemo() {
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [cancelActiveWork, state]);
+  }, [cancelActiveWork, handleOrbClick, state]);
 
   useEffect(() => {
     if (!ttsPlayback || !ttsPlayback.playIn.includes(state)) {
@@ -985,4 +994,11 @@ function isCancelTranscript(transcript: string): boolean {
   if (!remainder) return true;
   const words = remainder.split(/\s+/).filter(Boolean);
   return words.length <= 3 && !/\d/.test(remainder);
+}
+
+function isTypingTarget(target: EventTarget | null): boolean {
+  if (!(target instanceof HTMLElement)) return false;
+  if (target.isContentEditable) return true;
+  const tag = target.tagName;
+  return tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT";
 }
