@@ -10,6 +10,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, File, Form, UploadFile
 from fastapi.responses import JSONResponse, Response
+from pydantic import ValidationError
 
 from app.core.config import get_settings
 from app.dependencies.dashboard_auth import DashboardUser, require_dashboard_user
@@ -22,11 +23,16 @@ from app.schemas.julia_models import (
     JuliaVoiceMatch,
     JuliaVoicePlaybackResponse,
 )
+from app.schemas.julia_roi_models import (
+    JuliaResolvedInput,
+    JuliaROICollectionSession,
+)
 from app.services.julia_calibration_service import JuliaCalibrationError, get_calibration
 from app.services.julia_document_service import JuliaDocumentService, JuliaServiceError
 from app.services.julia_intent_router import IntentClass, classify_intent
 from app.services.julia_matcher import JuliaMatchDocument, select_matches
 from app.services.julia_openai_service import JuliaOpenAIError, JuliaOpenAIService
+from app.services.julia_roi_engine import JuliaROIEngine
 
 router = APIRouter(prefix="/julia", tags=["julia"])
 logger = logging.getLogger(__name__)
@@ -37,6 +43,15 @@ NO_MATCH_TTS_TEXT = "I could not find that. Narrow down your query."
 ROI_COMPANY_QUESTION_TEXT = "Which company is this for?"
 ROI_PAIN_POINTS_QUESTION_TEXT = "What pain points did you identify in their office or operation?"
 INITIAL_GREETING_TEMPLATE = "Hey {name}, what can I do for you today?"
+ROI_FIELD_QUESTIONS: dict[str, str] = {
+    "company_name": ROI_COMPANY_QUESTION_TEXT,
+    "pain_points": ROI_PAIN_POINTS_QUESTION_TEXT,
+    "T": "How many trucks are in their fleet?",
+    "Ld": "About how many loads per day do they run?",
+    "S": "What share of their freight is spot versus contracted?",
+    "Du": "What percentage of detention is currently not getting billed or collected?",
+    "P": "How many office or dispatch staff work on this workflow?",
+}
 
 
 def _max_voice_audio_mb() -> int:
@@ -53,6 +68,10 @@ def _service() -> JuliaDocumentService:
 
 def _openai_service() -> JuliaOpenAIService:
     return JuliaOpenAIService()
+
+
+def _roi_engine() -> JuliaROIEngine:
+    return JuliaROIEngine()
 
 
 def _error_response(exc: JuliaServiceError) -> JSONResponse:
@@ -153,6 +172,126 @@ def _greeting_name(raw_first_name: str | None) -> str:
     if not trimmed:
         return "there"
     return trimmed.split()[0]
+
+
+def _question_text_for_field(field: str) -> str:
+    question = ROI_FIELD_QUESTIONS.get(field)
+    if question is None:
+        raise ValueError(f"Unsupported ROI question field: {field}.")
+    return question
+
+
+def _field_label(field: str) -> str:
+    return {
+        "company_name": "company name",
+        "pain_points": "pain points",
+        "T": "fleet size",
+        "Ld": "loads per day",
+        "S": "spot mix",
+        "Du": "detention uncaptured percentage",
+        "P": "office/dispatch staff",
+    }.get(field, field)
+
+
+def _merge_unique(existing: list[str], additions: list[str]) -> list[str]:
+    merged: list[str] = list(existing)
+    for item in additions:
+        if item not in merged:
+            merged.append(item)
+    return merged
+
+
+def _parse_yes_no(transcript: str) -> bool | None:
+    lowered = transcript.strip().lower()
+    if not lowered:
+        return None
+    yes_tokens = ("yes", "yeah", "yep", "correct", "right", "sure", "do it", "use it")
+    no_tokens = ("no", "nope", "dont", "don't", "not now", "skip")
+    if any(token in lowered for token in yes_tokens):
+        return True
+    if any(token in lowered for token in no_tokens):
+        return False
+    return None
+
+
+def _format_default_value(field: str, value: float) -> str:
+    if field in {"S", "Du"}:
+        return f"{round(value * 100, 1):g}%"
+    if float(value).is_integer():
+        return str(int(value))
+    return f"{value:.2f}"
+
+
+def _numeric_fields_from_required(required_fields: list[str]) -> list[str]:
+    return [field for field in required_fields if field in {"T", "Ld", "S", "Du", "P"}]
+
+
+def _next_missing_numeric_field(session: JuliaROICollectionSession) -> str | None:
+    required_numeric = _numeric_fields_from_required(session.required_fields)
+    for field in required_numeric:
+        if field not in session.resolved_inputs:
+            return field
+    return None
+
+
+def _is_defaultable_field(field: str) -> bool:
+    return field in {"S", "P", "Ld", "Du"}
+
+
+def _resolved_input_from_followup_result(
+    *,
+    field: str,
+    value: float | None,
+    qualitative_tag: str | None,
+    confidence: float,
+    session: JuliaROICollectionSession,
+    calibration,
+) -> JuliaResolvedInput:
+    if field == "T":
+        if value is None:
+            raise ValueError("Fleet size is missing.")
+        if value < 1 or value > 10000 or not float(value).is_integer():
+            raise ValueError("Fleet size must be an integer between 1 and 10,000.")
+        return JuliaResolvedInput(value=float(int(value)), source="rep", confidence=confidence)
+    if field == "P":
+        if value is None:
+            raise ValueError("Office/dispatch staff count is missing.")
+        if value < 1 or value > 5000 or not float(value).is_integer():
+            raise ValueError("Office/dispatch staff must be an integer between 1 and 5,000.")
+        return JuliaResolvedInput(value=float(int(value)), source="rep", confidence=confidence)
+    if field == "Ld":
+        if value is None:
+            raise ValueError("Loads per day value is missing.")
+        if value <= 0:
+            raise ValueError("Loads per day must be greater than 0.")
+        t_value = session.resolved_inputs.get("T")
+        if t_value is not None and value > t_value.value * 10:
+            raise ValueError(
+                f"Loads per day is too high versus fleet size. Maximum accepted is T × 10 ({t_value.value * 10:g})."
+            )
+        return JuliaResolvedInput(value=float(value), source="rep", confidence=confidence)
+    if field in {"S", "Du"}:
+        if value is not None:
+            if value < 0 or value > 1:
+                raise ValueError(f"{_field_label(field).capitalize()} must be between 0 and 1.")
+            return JuliaResolvedInput(value=float(value), source="rep", confidence=confidence)
+        if qualitative_tag:
+            buckets = (
+                calibration.qualitative_buckets.S.model_dump()
+                if field == "S"
+                else calibration.qualitative_buckets.Du.model_dump()
+            )
+            bucket_value = buckets.get(qualitative_tag)
+            if bucket_value is None:
+                raise ValueError(f"Unsupported qualitative tag for {field}: {qualitative_tag}.")
+            return JuliaResolvedInput(
+                value=float(bucket_value),
+                source="rep_qualitative",
+                confidence=confidence,
+                qualitative_tag=qualitative_tag,
+            )
+        raise ValueError(f"{_field_label(field).capitalize()} answer did not include a usable value.")
+    raise ValueError(f"Unsupported follow-up field: {field}.")
 
 
 @router.post(
@@ -420,7 +559,7 @@ async def voice_intent(
         return _julia_error(502, "extraction_failed", exc.detail)
 
     company_name = _normalize_company_name(extraction.company_name)
-    required_fields = ["company_name", "pain_points"]
+    required_fields: list[str] = ["company_name", "pain_points"]
     collected_fields: list[str] = []
     missing_fields: list[str] = []
     stage = "company"
@@ -450,6 +589,11 @@ async def voice_intent(
             "required_fields": required_fields,
             "collected_fields": collected_fields,
             "missing_fields": missing_fields,
+            "resolved_inputs": {},
+            "pending_default_field": None,
+            "pending_default_value": None,
+            "pending_default_rule": None,
+            "followup_markers": [],
             "stage": stage,
         },
     }
@@ -475,6 +619,330 @@ async def voice_intent(
         roi_pending=pending_payload,
         tts_audio_base64=tts_audio_base64,
         tts_mime_type=tts_mime_type,
+    )
+
+
+@router.post(
+    "/voice/roi-followup",
+    response_model=JuliaVoiceIntentResponse,
+    responses={
+        413: {"model": JuliaErrorResponse},
+        422: {"model": JuliaErrorResponse},
+        502: {"model": JuliaErrorResponse},
+    },
+)
+async def voice_roi_followup(
+    audio: Annotated[UploadFile, File()],
+    expected_field: Annotated[str, Form()],
+    session: Annotated[str, Form()],
+    _user: Annotated[DashboardUser, Depends(require_dashboard_user)],
+) -> JuliaVoiceIntentResponse | JSONResponse:
+    """Handle guided ROI follow-up answers for company, pain points, and numeric fields."""
+    allowed_fields = {"company_name", "pain_points", "T", "Ld", "S", "Du", "P"}
+    if expected_field not in allowed_fields:
+        return _julia_error(
+            422,
+            "invalid_expected_field",
+            f"expected_field must be one of: {', '.join(sorted(allowed_fields))}.",
+        )
+
+    try:
+        session_state = JuliaROICollectionSession.model_validate_json(session)
+    except ValidationError as exc:
+        return _julia_error(422, "invalid_session", f"Session payload is invalid: {exc}")
+
+    if session_state.stage == "complete":
+        return _julia_error(422, "session_complete", "ROI session is already complete.")
+
+    audio_bytes = await audio.read()
+    max_audio_mb = _max_voice_audio_mb()
+    if len(audio_bytes) > _max_voice_audio_bytes():
+        return _julia_error(413, "audio_too_large", f"Audio must be {max_audio_mb} MB or smaller.")
+
+    openai_service = _openai_service()
+    try:
+        transcript = openai_service.transcribe_audio(
+            audio=audio_bytes,
+            filename=audio.filename or "julia-voice-followup",
+            content_type=audio.content_type,
+        )
+    except JuliaOpenAIError as exc:
+        return _julia_error(502, "transcription_failed", exc.detail)
+
+    try:
+        calibration = get_calibration()
+    except JuliaCalibrationError as exc:
+        return _julia_error(500, exc.code, exc.detail)
+
+    transcript = openai_service.normalize_brand_variants(
+        transcript=transcript,
+        calibration=calibration,
+    )
+    engine = _roi_engine()
+
+    def pending_response(
+        *,
+        next_field: str,
+        detail: str,
+        stage: str,
+        question_text: str | None = None,
+    ) -> JuliaVoiceIntentResponse:
+        session_state.stage = stage
+        session_state.missing_fields = [next_field]
+        pending_payload = {
+            "missing": [next_field],
+            "next_field": next_field,
+            "question_text": question_text or _question_text_for_field(next_field),
+            "detail": detail,
+            "session": session_state.model_dump(),
+        }
+        tts_audio_base64, tts_mime_type = _synthesize_voice_response(
+            openai_service,
+            text=pending_payload["question_text"],
+            doc_id=None,
+        )
+        return JuliaVoiceIntentResponse(
+            transcript=transcript,
+            intent="roi_pending_input",
+            matches=[],
+            roi_pending=pending_payload,
+            tts_audio_base64=tts_audio_base64,
+            tts_mime_type=tts_mime_type,
+        )
+
+    def finalize_analysis() -> JuliaVoiceIntentResponse | JSONResponse:
+        if not session_state.company_name:
+            return pending_response(
+                next_field="company_name",
+                detail="I still need the company name to continue.",
+                stage="company",
+            )
+        try:
+            payload = engine.evaluate_guided_roi(
+                company_name=session_state.company_name,
+                matched_pain_points=session_state.matched_pain_points,
+                inputs=session_state.resolved_inputs,
+                calibration=calibration,
+                followup_markers=session_state.followup_markers,
+            )
+        except ValueError as exc:
+            return _julia_error(500, "roi_engine_invalid_state", str(exc))
+
+        tts_text = (
+            f"Here's the ROI analysis for {payload.company_name}."
+            if payload.company_name
+            else "Here's the ROI analysis."
+        )
+        tts_audio_base64, tts_mime_type = _synthesize_voice_response(
+            openai_service,
+            text=tts_text,
+            doc_id=None,
+        )
+        session_state.stage = "complete"
+        session_state.missing_fields = []
+        return JuliaVoiceIntentResponse(
+            transcript=transcript,
+            intent="roi_analysis",
+            matches=[],
+            roi_payload=payload,
+            tts_audio_base64=tts_audio_base64,
+            tts_mime_type=tts_mime_type,
+        )
+
+    session_state.answer_transcripts.append(transcript)
+
+    if expected_field == "company_name":
+        company_name = _normalize_company_name(transcript)
+        if company_name is None:
+            return pending_response(
+                next_field="company_name",
+                detail="I could not capture the company name. Which company is this for?",
+                stage="company",
+            )
+        session_state.company_name = company_name
+        session_state.collected_fields = _merge_unique(session_state.collected_fields, ["company_name"])
+        session_state.required_fields = _merge_unique(session_state.required_fields, ["company_name", "pain_points"])
+        return pending_response(
+            next_field="pain_points",
+            detail="Tell me the main pain points you identified in their office or operation.",
+            stage="pain_points",
+        )
+
+    if expected_field == "pain_points":
+        try:
+            pain_points = openai_service.extract_roi_pain_points(
+                transcript=transcript,
+                calibration=calibration,
+            )
+        except JuliaOpenAIError as exc:
+            return _julia_error(502, "extraction_failed", exc.detail)
+
+        filtered_points, drop_markers = engine.filter_pain_points_for_followup(
+            transcript=transcript,
+            pain_point_matches=pain_points,
+            calibration=calibration,
+        )
+        if not filtered_points:
+            return pending_response(
+                next_field="pain_points",
+                detail="I could not capture usable pain points. Please describe them again.",
+                stage="pain_points",
+            )
+
+        session_state.matched_pain_points = filtered_points
+        session_state.followup_markers = _merge_unique(session_state.followup_markers, drop_markers)
+        session_state.collected_fields = _merge_unique(session_state.collected_fields, ["pain_points"])
+        required_numeric = engine.plan_required_fields(
+            matched_pain_points=filtered_points,
+            calibration=calibration,
+        )
+        session_state.required_fields = _merge_unique(
+            ["company_name", "pain_points"],
+            required_numeric,
+        )
+
+        for field in required_numeric:
+            if field in session_state.resolved_inputs:
+                continue
+            candidate = getattr(session_state.variables, field, None)
+            if candidate is None:
+                continue
+            try:
+                session_state.resolved_inputs[field] = _resolved_input_from_followup_result(
+                    field=field,
+                    value=getattr(candidate, "value", None),
+                    qualitative_tag=getattr(candidate, "qualitative_tag", None),
+                    confidence=float(getattr(candidate, "confidence", 0.0)),
+                    session=session_state,
+                    calibration=calibration,
+                )
+                session_state.collected_fields = _merge_unique(session_state.collected_fields, [field])
+            except ValueError:
+                continue
+
+        next_numeric = _next_missing_numeric_field(session_state)
+        if next_numeric is None:
+            return finalize_analysis()
+        return pending_response(
+            next_field=next_numeric,
+            detail=f"I still need {_field_label(next_numeric)} before running analysis.",
+            stage="numeric_fields",
+        )
+
+    if expected_field not in {"T", "Ld", "S", "Du", "P"}:
+        return _julia_error(422, "invalid_expected_field", "Follow-up field is not numeric.")
+
+    if session_state.pending_default_field == expected_field:
+        yes_no = _parse_yes_no(transcript)
+        if yes_no is None:
+            return pending_response(
+                next_field=expected_field,
+                detail="Please answer yes or no so I can continue.",
+                stage="confirm_default",
+                question_text=(
+                    f"I can use the default of "
+                    f"{_format_default_value(expected_field, session_state.pending_default_value or 0.0)} "
+                    f"for {_field_label(expected_field)}. Should I use that?"
+                ),
+            )
+        if not yes_no:
+            session_state.pending_default_field = None
+            session_state.pending_default_value = None
+            session_state.pending_default_rule = None
+            return pending_response(
+                next_field=expected_field,
+                detail=f"Okay, I still need {_field_label(expected_field)} from you.",
+                stage="numeric_fields",
+            )
+
+        fleet_size = session_state.resolved_inputs.get("T")
+        try:
+            resolved_default = engine.resolve_user_approved_default(
+                symbol=expected_field,
+                calibration=calibration,
+                fleet_size=fleet_size.value if fleet_size else None,
+            )
+        except ValueError as exc:
+            return _julia_error(422, "default_resolution_failed", str(exc))
+        session_state.resolved_inputs[expected_field] = resolved_default
+        session_state.collected_fields = _merge_unique(session_state.collected_fields, [expected_field])
+        session_state.followup_markers = _merge_unique(
+            session_state.followup_markers,
+            [f"Used default for {_field_label(expected_field)} with explicit rep approval."],
+        )
+        session_state.pending_default_field = None
+        session_state.pending_default_value = None
+        session_state.pending_default_rule = None
+    else:
+        try:
+            followup_result = openai_service.extract_roi_followup_field(
+                transcript=transcript,
+                expected_field=expected_field,
+                calibration=calibration,
+            )
+        except JuliaOpenAIError as exc:
+            return _julia_error(502, "followup_extraction_failed", exc.detail)
+
+        if followup_result.status == "not_applicable_or_unknown":
+            if not _is_defaultable_field(expected_field):
+                return pending_response(
+                    next_field=expected_field,
+                    detail=f"{_field_label(expected_field).capitalize()} is required and has no default.",
+                    stage="numeric_fields",
+                )
+            fleet_size = session_state.resolved_inputs.get("T")
+            try:
+                default_input = engine.resolve_user_approved_default(
+                    symbol=expected_field,
+                    calibration=calibration,
+                    fleet_size=fleet_size.value if fleet_size else None,
+                )
+            except ValueError as exc:
+                return _julia_error(422, "default_resolution_failed", str(exc))
+            session_state.pending_default_field = expected_field
+            session_state.pending_default_value = default_input.value
+            session_state.pending_default_rule = default_input.rule
+            return pending_response(
+                next_field=expected_field,
+                detail=f"Default approval required for {_field_label(expected_field)}.",
+                stage="confirm_default",
+                question_text=(
+                    f"I can use the default of {_format_default_value(expected_field, default_input.value)} "
+                    f"for {_field_label(expected_field)}. Should I use that?"
+                ),
+            )
+
+        if followup_result.status in {"no_answer", "needs_confirmation"}:
+            return pending_response(
+                next_field=expected_field,
+                detail=f"I could not capture {_field_label(expected_field)}. {_question_text_for_field(expected_field)}",
+                stage="numeric_fields",
+            )
+
+        try:
+            session_state.resolved_inputs[expected_field] = _resolved_input_from_followup_result(
+                field=expected_field,
+                value=followup_result.value,
+                qualitative_tag=followup_result.qualitative_tag,
+                confidence=followup_result.confidence,
+                session=session_state,
+                calibration=calibration,
+            )
+        except ValueError as exc:
+            return pending_response(
+                next_field=expected_field,
+                detail=f"I could not capture {_field_label(expected_field)} ({exc}).",
+                stage="numeric_fields",
+            )
+        session_state.collected_fields = _merge_unique(session_state.collected_fields, [expected_field])
+
+    next_numeric = _next_missing_numeric_field(session_state)
+    if next_numeric is None:
+        return finalize_analysis()
+    return pending_response(
+        next_field=next_numeric,
+        detail=f"I still need {_field_label(next_numeric)} before running analysis.",
+        stage="numeric_fields",
     )
 
 

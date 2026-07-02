@@ -83,8 +83,8 @@ export function RoiReportModal({ payload, onClose }: RoiReportModalProps) {
                 return (
                   <li key={row.key}>
                     <span>{row.label}</span>
-                    <span>{formatInputValue(input.value, row.format)}</span>
-                    <span className={s.roiInputSource}>{describeSource(input.source)}</span>
+                    <span>{input ? formatInputValue(input.value, row.format) : "—"}</span>
+                    <span className={s.roiInputSource}>{describeSource(input?.source)}</span>
                   </li>
                 );
               })}
@@ -135,9 +135,11 @@ function formatInputValue(value: number, mode: "count" | "percent"): string {
   return new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 }).format(value);
 }
 
-function describeSource(source: JuliaROIInputSource): string {
+function describeSource(source: JuliaROIInputSource | undefined): string {
+  if (!source) return "not required";
   if (source === "rep") return "from rep";
   if (source === "rep_qualitative") return "from rep phrasing";
+  if (source === "user_approved_default") return "approved default";
   if (source === "derived") return "derived from T";
   return "default";
 }

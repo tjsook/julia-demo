@@ -21,6 +21,17 @@ from app.schemas.julia_roi_models import (
 from app.services.julia_matcher import tokenize
 
 _FLEET_SIZE_REQUIRED_DETAIL = "Fleet size is required. Ask the prospect how many trucks they run."
+_GUIDED_FIELD_ORDER: tuple[str, ...] = ("T", "Ld", "S", "Du", "P")
+_EQUATION_REQUIRED_FIELDS: dict[EquationId, set[str]] = {
+    "E1": {"T", "Ld", "S"},
+    "E2": {"T", "Ld", "Du"},
+    "E3": {"T", "P"},
+    "E3a": {"T", "P"},
+    "E3b": {"T", "P"},
+    "E3c": {"T", "P"},
+    "E4": {"T"},
+    "E5": {"T", "Ld"},
+}
 
 
 @dataclass(frozen=True)
@@ -145,6 +156,111 @@ class JuliaROIEngine:
                 summary=summary,
                 honesty_markers=honesty_markers,
             )
+        )
+
+    def filter_pain_points_for_followup(
+        self,
+        *,
+        transcript: str,
+        pain_point_matches: list[JuliaPainPointMatch],
+        calibration: JuliaCalibrationModel,
+    ) -> tuple[list[JuliaPainPointMatch], list[str]]:
+        verified_pain_points, evidence_markers = self._verify_pain_point_evidence(
+            transcript=transcript,
+            pain_point_matches=pain_point_matches,
+            calibration=calibration,
+        )
+        thresholded_pain_points, threshold_markers = self._threshold_filter_pain_points(
+            pain_point_matches=verified_pain_points,
+            calibration=calibration,
+        )
+        return thresholded_pain_points, [*evidence_markers, *threshold_markers]
+
+    def plan_required_fields(
+        self,
+        *,
+        matched_pain_points: list[JuliaPainPointMatch],
+        calibration: JuliaCalibrationModel,
+    ) -> list[str]:
+        equation_ids = self._equation_ids_for_pain_points(
+            matched_pain_points=matched_pain_points,
+            calibration=calibration,
+        )
+        required: set[str] = {"T"}
+        for equation_id in equation_ids:
+            required.update(_EQUATION_REQUIRED_FIELDS[equation_id])
+        return [field for field in _GUIDED_FIELD_ORDER if field in required]
+
+    def resolve_user_approved_default(
+        self,
+        *,
+        symbol: str,
+        calibration: JuliaCalibrationModel,
+        fleet_size: float | None,
+    ) -> JuliaResolvedInput:
+        if symbol == "T":
+            raise ValueError("Fleet size (T) has no default and must be provided by the rep.")
+        resolved = self._resolve_optional_input(
+            symbol=symbol,
+            candidate=None,
+            fleet_size=fleet_size,
+            calibration=calibration,
+        )
+        return resolved.model_copy(update={"source": "user_approved_default"})
+
+    def evaluate_guided_roi(
+        self,
+        *,
+        company_name: str | None,
+        matched_pain_points: list[JuliaPainPointMatch],
+        inputs: dict[str, JuliaResolvedInput],
+        calibration: JuliaCalibrationModel,
+        followup_markers: list[str] | None = None,
+    ) -> JuliaROIAnalysisPayload:
+        equation_ids = self._equation_ids_for_pain_points(
+            matched_pain_points=matched_pain_points,
+            calibration=calibration,
+        )
+        required_fields: set[str] = set()
+        for equation_id in equation_ids:
+            required_fields.update(_EQUATION_REQUIRED_FIELDS[equation_id])
+        missing_required = [field for field in _GUIDED_FIELD_ORDER if field in required_fields and field not in inputs]
+        if missing_required:
+            missing_text = ", ".join(missing_required)
+            raise ValueError(f"Missing required guided ROI inputs: {missing_text}.")
+
+        normalized_inputs: dict[str, JuliaResolvedInput | None] = {
+            "T": inputs.get("T"),
+            "S": inputs.get("S"),
+            "P": inputs.get("P"),
+            "Ld": inputs.get("Ld"),
+            "Du": inputs.get("Du"),
+        }
+        equation_results = [
+            self._evaluate_equation(equation_id, normalized_inputs, calibration)
+            for equation_id in equation_ids
+        ]
+        annual_value = sum(result.result for result in equation_results)
+        summary = JuliaROISummary(annual_value=round(annual_value, 2))
+        honesty_markers = self._honesty_markers(
+            inputs=normalized_inputs,
+            equation_results=equation_results,
+            calibration=calibration,
+            range_rejections={},
+            pain_point_drop_markers=list(followup_markers or []),
+        )
+        payload_inputs = {
+            symbol: entry
+            for symbol, entry in normalized_inputs.items()
+            if entry is not None
+        }
+        return JuliaROIAnalysisPayload(
+            company_name=company_name,
+            matched_pain_points=matched_pain_points,
+            inputs=payload_inputs,
+            equations=equation_results,
+            summary=summary,
+            honesty_markers=honesty_markers,
         )
 
     def _sanitize_extracted_variables(
@@ -463,6 +579,18 @@ class JuliaROIEngine:
         ]
         return ordered, selected
 
+    def _equation_ids_for_pain_points(
+        self,
+        *,
+        matched_pain_points: list[JuliaPainPointMatch],
+        calibration: JuliaCalibrationModel,
+    ) -> list[EquationId]:
+        selected_equations, _ = self._selected_equations(
+            matched_pain_points=matched_pain_points,
+            calibration=calibration,
+        )
+        return selected_equations
+
     def _evaluate_equation(
         self,
         equation_id: EquationId,
@@ -471,15 +599,11 @@ class JuliaROIEngine:
     ) -> JuliaEquationResult:
         eq_def = _EQUATION_DEFS[equation_id]
 
-        t = _required_input(inputs, "T")
-        s = _required_input(inputs, "S")
-        p = _required_input(inputs, "P")
-        ld = _required_input(inputs, "Ld")
-        du = _required_input(inputs, "Du")
-
         constants = calibration.constants
 
         if equation_id == "E1":
+            ld = _required_input(inputs, "Ld")
+            s = _required_input(inputs, "S")
             inputs_used = {
                 "Ld": ld,
                 "D": constants["D"].value,
@@ -489,6 +613,8 @@ class JuliaROIEngine:
             }
             result = ld * constants["D"].value * s * constants["R"].value * constants["Up"].value
         elif equation_id == "E2":
+            ld = _required_input(inputs, "Ld")
+            du = _required_input(inputs, "Du")
             inputs_used = {
                 "Ld": ld,
                 "D": constants["D"].value,
@@ -506,21 +632,27 @@ class JuliaROIEngine:
                 * du
             )
         elif equation_id == "E3":
+            p = _required_input(inputs, "P")
             inputs_used = {"P": p, "Lc": constants["Lc"].value, "Oa": constants["Oa"].value}
             result = p * constants["Lc"].value * constants["Oa"].value
         elif equation_id == "E3a":
+            p = _required_input(inputs, "P")
             inputs_used = {"P": p, "Lc": constants["Lc"].value}
             result = p * constants["Lc"].value * 0.15
         elif equation_id == "E3b":
+            p = _required_input(inputs, "P")
             inputs_used = {"P": p, "Lc": constants["Lc"].value}
             result = p * constants["Lc"].value * 0.10
         elif equation_id == "E3c":
+            p = _required_input(inputs, "P")
             inputs_used = {"P": p, "Lc": constants["Lc"].value}
             result = p * constants["Lc"].value * 0.05
         elif equation_id == "E4":
+            t = _required_input(inputs, "T")
             inputs_used = {"T": t, "G": constants["G"].value, "Fg": constants["Fg"].value}
             result = t * constants["G"].value * constants["Fg"].value
         elif equation_id == "E5":
+            ld = _required_input(inputs, "Ld")
             inputs_used = {"Ld": ld, "D": constants["D"].value, "R": constants["R"].value}
             annual_freight = ld * constants["D"].value * constants["R"].value
             result = annual_freight * 0.01
@@ -551,51 +683,64 @@ class JuliaROIEngine:
     ) -> list[str]:
         markers: list[str] = [*pain_point_drop_markers]
 
-        s = _required_input_obj(inputs, "S")
-        if "S" in range_rejections:
-            markers.append(range_rejections["S"])
-        if s.source == "rep_qualitative" and s.qualitative_tag:
-            markers.append(
-                f"S inferred from rep phrasing -> '{s.qualitative_tag}' ({s.value:.2f}). "
-                "Override if more precise data is known."
-            )
-        elif s.source == "default":
-            if "S" not in range_rejections:
-                markers.append("S (% spot) defaulted to 10% — rep did not specify.")
-
-        du = _required_input_obj(inputs, "Du")
-        if "Du" in range_rejections:
-            markers.append(range_rejections["Du"])
-        if du.source == "rep_qualitative" and du.qualitative_tag:
-            markers.append(
-                f"Du inferred from rep phrasing -> '{du.qualitative_tag}' ({du.value:.2f}). "
-                "Override if more precise data is known."
-            )
-        elif du.source == "default":
-            if "Du" not in range_rejections:
-                markers.append("Du (% detention uncaptured) defaulted to 50% — rep did not specify.")
-
-        p = _required_input_obj(inputs, "P")
-        if p.source == "derived":
-            if "P" in range_rejections:
-                markers.append(range_rejections["P"])
-            else:
-                trucks = _required_input(inputs, "T")
-                markers.append(f"P (office people) derived from T (ceil({trucks:g}/7) = {p.value:g}).")
-
-        ld = _required_input_obj(inputs, "Ld")
-        if ld.source == "derived":
-            if "Ld" in range_rejections:
-                markers.append(range_rejections["Ld"])
-            else:
-                ld_multiplier = calibration.derivation_rules["Ld"].multiplier
-                if ld_multiplier is None:
-                    raise ValueError('Derivation rule for "Ld" is missing required "multiplier".')
+        s = inputs.get("S")
+        if s is not None:
+            if "S" in range_rejections:
+                markers.append(range_rejections["S"])
+            if s.source == "rep_qualitative" and s.qualitative_tag:
                 markers.append(
-                    f"Ld (loads/day) derived from T ({_required_input(inputs, 'T'):g} × {ld_multiplier:g} = {ld.value:g})."
+                    f"S inferred from rep phrasing -> '{s.qualitative_tag}' ({s.value:.2f}). "
+                    "Override if more precise data is known."
                 )
+            elif s.source == "user_approved_default":
+                markers.append(f"S defaulted to {s.value:.2f} with explicit rep approval.")
+            elif s.source == "default":
+                if "S" not in range_rejections:
+                    markers.append("S (% spot) defaulted to 10% — rep did not specify.")
 
-        markers.extend(self._implied_ratio_markers(inputs=inputs, calibration=calibration))
+        du = inputs.get("Du")
+        if du is not None:
+            if "Du" in range_rejections:
+                markers.append(range_rejections["Du"])
+            if du.source == "rep_qualitative" and du.qualitative_tag:
+                markers.append(
+                    f"Du inferred from rep phrasing -> '{du.qualitative_tag}' ({du.value:.2f}). "
+                    "Override if more precise data is known."
+                )
+            elif du.source == "user_approved_default":
+                markers.append(f"Du defaulted to {du.value:.2f} with explicit rep approval.")
+            elif du.source == "default":
+                if "Du" not in range_rejections:
+                    markers.append("Du (% detention uncaptured) defaulted to 50% — rep did not specify.")
+
+        p = inputs.get("P")
+        if p is not None:
+            if p.source == "derived":
+                if "P" in range_rejections:
+                    markers.append(range_rejections["P"])
+                else:
+                    trucks = _required_input(inputs, "T")
+                    markers.append(f"P (office people) derived from T (ceil({trucks:g}/7) = {p.value:g}).")
+            elif p.source == "user_approved_default":
+                markers.append(f"P defaulted to {p.value:g} with explicit rep approval.")
+
+        ld = inputs.get("Ld")
+        if ld is not None:
+            if ld.source == "derived":
+                if "Ld" in range_rejections:
+                    markers.append(range_rejections["Ld"])
+                else:
+                    ld_multiplier = calibration.derivation_rules["Ld"].multiplier
+                    if ld_multiplier is None:
+                        raise ValueError('Derivation rule for "Ld" is missing required "multiplier".')
+                    markers.append(
+                        f"Ld (loads/day) derived from T ({_required_input(inputs, 'T'):g} × {ld_multiplier:g} = {ld.value:g})."
+                    )
+            elif ld.source == "user_approved_default":
+                markers.append(f"Ld defaulted to {ld.value:g} with explicit rep approval.")
+
+        if inputs.get("T") is not None and inputs.get("Ld") is not None:
+            markers.extend(self._implied_ratio_markers(inputs=inputs, calibration=calibration))
 
         used_constants: set[str] = set()
         for equation in equation_results:

@@ -5,6 +5,7 @@ import type {
   JuliaDocumentListResponse,
   JuliaDocumentStatus,
   JuliaEditPayload,
+  JuliaROICollectionSession,
   JuliaRecordedAudio,
   JuliaSignedUrlResponse,
   JuliaUploadPayload,
@@ -148,6 +149,24 @@ export async function postJuliaVoiceGreeting(firstName?: string): Promise<JuliaV
     body: form,
   });
   return parseJuliaJson<JuliaVoicePlaybackResponse>(res, "Failed to create Julia greeting prompt.");
+}
+
+export async function postJuliaRoiFollowup(
+  recording: JuliaRecordedAudio,
+  expectedField: string,
+  session: JuliaROICollectionSession,
+): Promise<JuliaVoiceIntentResponse> {
+  const headers = await getDashboardAuthHeaders();
+  const form = new FormData();
+  form.set("audio", recording.blob, recording.filename);
+  form.set("expected_field", expectedField);
+  form.set("session", JSON.stringify(session));
+  const res = await fetch(`${BASE_URL}/julia/voice/roi-followup`, {
+    method: "POST",
+    headers,
+    body: form,
+  });
+  return parseJuliaJson<JuliaVoiceIntentResponse>(res, "Failed to process Julia ROI follow-up.");
 }
 
 export async function postJuliaVoiceDocumentConfirmation(

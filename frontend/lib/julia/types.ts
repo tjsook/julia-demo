@@ -48,7 +48,12 @@ export interface JuliaVoiceMatch {
 }
 
 export type JuliaROIInputSymbol = "T" | "S" | "P" | "Ld" | "Du";
-export type JuliaROIInputSource = "rep" | "rep_qualitative" | "derived" | "default";
+export type JuliaROIInputSource =
+  | "rep"
+  | "rep_qualitative"
+  | "derived"
+  | "default"
+  | "user_approved_default";
 export type JuliaROIEquationId = "E1" | "E2" | "E3" | "E3a" | "E3b" | "E3c" | "E4" | "E5";
 
 export interface JuliaROIPainPointMatch {
@@ -61,16 +66,11 @@ export interface JuliaROIResolvedInput {
   value: number;
   source: JuliaROIInputSource;
   confidence?: number | null;
+  qualitative_tag?: string | null;
   rule?: string | null;
 }
 
-export interface JuliaROIInputs {
-  T: JuliaROIResolvedInput;
-  S: JuliaROIResolvedInput;
-  P: JuliaROIResolvedInput;
-  Ld: JuliaROIResolvedInput;
-  Du: JuliaROIResolvedInput;
-}
+export type JuliaROIInputs = Partial<Record<JuliaROIInputSymbol, JuliaROIResolvedInput>>;
 
 export interface JuliaROIEquationResult {
   id: JuliaROIEquationId;
@@ -102,8 +102,8 @@ export interface JuliaROIAnalysisPayload {
 }
 
 export interface JuliaROIPendingInput {
-  missing: string[];
-  next_field?: string | null;
+  missing: JuliaROIPendingField[];
+  next_field?: JuliaROIPendingField | null;
   question_text?: string | null;
   detail: string;
   session?: JuliaROICollectionSession | null;
@@ -124,6 +124,7 @@ export type JuliaROICollectionStage =
   | "company"
   | "pain_points"
   | "numeric_fields"
+  | "confirm_default"
   | "complete";
 
 export interface JuliaROICollectionSession {
@@ -131,10 +132,15 @@ export interface JuliaROICollectionSession {
   answer_transcripts: string[];
   company_name: string | null;
   matched_pain_points: JuliaROIPainPointMatch[];
-  variables: Partial<Record<JuliaROIInputSymbol, unknown>>;
+  variables: Partial<Record<JuliaROIInputSymbol, unknown>> & Record<string, unknown>;
   required_fields: JuliaROIPendingField[];
   collected_fields: JuliaROIPendingField[];
   missing_fields: JuliaROIPendingField[];
+  resolved_inputs: Partial<Record<JuliaROIInputSymbol, JuliaROIResolvedInput>>;
+  pending_default_field?: JuliaROIInputSymbol | null;
+  pending_default_value?: number | null;
+  pending_default_rule?: string | null;
+  followup_markers: string[];
   stage: JuliaROICollectionStage;
 }
 
