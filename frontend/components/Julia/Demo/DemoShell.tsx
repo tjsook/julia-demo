@@ -74,22 +74,23 @@ export function DemoShell({
       })
     : [];
   const compactStatusLabel = state === "listening" ? "Listening" : state === "processing" ? "Thinking" : "Ready";
+  const isDimmed =
+    state === "showing-document" ||
+    state === "showing-selector" ||
+    state === "showing-roi-report" ||
+    state === "playing-roi-question";
+  const orbMode =
+    errorToast ? "alert" : isDimmed ? "dimmed" : state === "listening" ? "listening" : state === "processing" ? "processing" : "idle";
 
   return (
     <main className={s.demoMain}>
       <div className={s.demoCenter}>
         <ParticleOrb
-          mode="idle"
+          mode={orbMode}
           onClick={onOrbClick}
           size={380}
           className={s.particleOrbButton}
-          disabled={
-            state === "processing" ||
-            state === "showing-document" ||
-            state === "showing-selector" ||
-            state === "showing-roi-report" ||
-            state === "playing-roi-question"
-          }
+          disabled={state === "processing" || isDimmed}
         />
         <div className={s.demoStatus}>{isDebugMode ? statusLabel[state] : compactStatusLabel}</div>
         {interactionHint && <div className={s.demoHint}>{interactionHint}</div>}

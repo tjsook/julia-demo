@@ -23,6 +23,8 @@ const AMBER_PALETTE: Array<[number, number, number]> = [
   [255, 211, 59],
   [255, 233, 168],
 ];
+const ALERT_RED: [number, number, number] = [248, 94, 80];
+const LISTENING_WARM_WHITE: [number, number, number] = [255, 245, 220];
 
 const GOLDEN = Math.PI * (3 - Math.sqrt(5));
 
@@ -41,6 +43,14 @@ export function ParticleOrb({
   const pointsRef = useRef<OrbPoint[]>([]);
   const noiseRef = useRef<(x: number, y: number, z: number) => number>(() => 0);
   const phaseRef = useRef(0);
+  const visualRef = useRef({
+    speed: 0.0026,
+    noiseAmp: 0.3,
+    brightness: 1,
+    dotScale: 1,
+    alertMix: 0,
+    opacity: 1,
+  });
 
   useEffect(() => {
     modeRef.current = mode;
@@ -79,11 +89,24 @@ export function ParticleOrb({
     noiseRef.current = createSimplexNoise3D(8123);
 
     function renderFrame() {
+      const currentMode = modeRef.current;
+      const currentAmplitude = clamp01(amplitudeRef.current);
+      const targets = modeTargets(currentMode, currentAmplitude);
+      const visuals = visualRef.current;
+      const lerpStrength = 0.12;
+      visuals.speed += (targets.speed - visuals.speed) * lerpStrength;
+      visuals.noiseAmp += (targets.noiseAmp - visuals.noiseAmp) * lerpStrength;
+      visuals.brightness += (targets.brightness - visuals.brightness) * lerpStrength;
+      visuals.dotScale += (targets.dotScale - visuals.dotScale) * lerpStrength;
+      visuals.alertMix += (targets.alertMix - visuals.alertMix) * lerpStrength;
+      visuals.opacity += (targets.opacity - visuals.opacity) * lerpStrength;
+
       ctx.clearRect(0, 0, size, size);
       ctx.globalCompositeOperation = "lighter";
 
-      // Phase 1 ships the imported orb baseline with idle motion only.
-      phaseRef.current += 0.0026;
+      if (currentMode !== "dimmed") {
+        phaseRef.current += visuals.speed;
+      }
 
       const spinY = phaseRef.current * 0.62;
       const spinX = Math.sin(phaseRef.current * 0.35) * 0.28;
@@ -99,11 +122,15 @@ export function ParticleOrb({
         const combinedNoise =
           noise(point.x * 1.5 + phaseRef.current, point.y * 1.5, point.z * 1.5 + phaseRef.current * 0.7) * 0.72 +
           noise(point.x * 3 + phaseRef.current * 1.3, point.y * 3, point.z * 3) * 0.28;
-        const displacement = 1 + combinedNoise * 0.3;
+        const displacement = 1 + combinedNoise * visuals.noiseAmp;
+        const zJitter =
+          currentMode === "processing"
+            ? Math.sin(phaseRef.current * 5.2 + index * 0.01) * 0.01
+            : 0;
 
         const px = point.x * displacement;
         const py = point.y * displacement;
-        const pz = point.z * displacement;
+        const pz = point.z * displacement + zJitter;
 
         const rx = px * cosY - pz * sinY;
         const rz = px * sinY + pz * cosY;
@@ -115,9 +142,13 @@ export function ParticleOrb({
         const screenY = centerY + ry * radius * scale;
         const depth = clamp01((rz2 + 1.35) / 2.7);
 
-        const alpha = 0.16 + depth * depth * 0.92;
-        const dotSize = 0.6 + depth * depth * 1.6;
-        const [r, g, b] = point.color;
+        const alpha = (0.16 + depth * depth * 0.92) * visuals.opacity;
+        const dotSize = (0.6 + depth * depth * 1.6) * visuals.dotScale;
+        const warmMix = currentMode === "listening" ? currentAmplitude * 0.45 : 0;
+        const warmed = blendColor(point.color, LISTENING_WARM_WHITE, warmMix);
+        const redShifted = blendColor(warmed, ALERT_RED, visuals.alertMix);
+        const brightened = scaleColor(redShifted, visuals.brightness);
+        const [r, g, b] = brightened;
         ctx.fillStyle = `rgba(${r},${g},${b},${alpha.toFixed(3)})`;
         ctx.fillRect(screenX, screenY, dotSize, dotSize);
       }
@@ -140,13 +171,72 @@ export function ParticleOrb({
       type="button"
       className={className}
       onClick={onClick}
-      aria-label={modeRef.current === "listening" ? "Stop listening" : "Start listening"}
+      aria-label={mode === "listening" ? "Stop listening" : "Start listening"}
       aria-disabled={disabled}
       disabled={disabled}
+      style={{ opacity: mode === "dimmed" ? 0.35 : 1 }}
     >
       <canvas ref={canvasRef} />
     </button>
   );
+}
+
+function modeTargets(mode: OrbMode, amplitude: number): {
+  speed: number;
+  noiseAmp: number;
+  brightness: number;
+  dotScale: number;
+  alertMix: number;
+  opacity: number;
+} {
+  if (mode === "listening") {
+    return {
+      speed: 0.0026 * (1 + amplitude * 1.5),
+      noiseAmp: 0.3 + amplitude * 0.55,
+      brightness: 1,
+      dotScale: 1 + amplitude * 0.4,
+      alertMix: 0,
+      opacity: 1,
+    };
+  }
+  if (mode === "processing") {
+    return {
+      speed: 0.0065,
+      noiseAmp: 0.55,
+      brightness: 1.08,
+      dotScale: 1.05,
+      alertMix: 0,
+      opacity: 1,
+    };
+  }
+  if (mode === "dimmed") {
+    return {
+      speed: 0,
+      noiseAmp: 0.3,
+      brightness: 1,
+      dotScale: 1,
+      alertMix: 0,
+      opacity: 0.35,
+    };
+  }
+  if (mode === "alert") {
+    return {
+      speed: 0.0026,
+      noiseAmp: 0.3,
+      brightness: 1,
+      dotScale: 1,
+      alertMix: 0.75,
+      opacity: 1,
+    };
+  }
+  return {
+    speed: 0.0026,
+    noiseAmp: 0.3,
+    brightness: 1,
+    dotScale: 1,
+    alertMix: 0,
+    opacity: 1,
+  };
 }
 
 function buildOrbPoints(count: number, palette: Array<[number, number, number]>): OrbPoint[] {
@@ -185,6 +275,31 @@ function clamp01(value: number): number {
   if (value < 0) return 0;
   if (value > 1) return 1;
   return value;
+}
+
+function blendColor(
+  base: [number, number, number],
+  target: [number, number, number],
+  amount: number,
+): [number, number, number] {
+  const t = clamp01(amount);
+  return [
+    Math.round(base[0] + (target[0] - base[0]) * t),
+    Math.round(base[1] + (target[1] - base[1]) * t),
+    Math.round(base[2] + (target[2] - base[2]) * t),
+  ];
+}
+
+function scaleColor(
+  color: [number, number, number],
+  brightness: number,
+): [number, number, number] {
+  const multiplier = Math.max(0, brightness);
+  return [
+    Math.min(255, Math.round(color[0] * multiplier)),
+    Math.min(255, Math.round(color[1] * multiplier)),
+    Math.min(255, Math.round(color[2] * multiplier)),
+  ];
 }
 
 function createSimplexNoise3D(seed: number): (x: number, y: number, z: number) => number {
