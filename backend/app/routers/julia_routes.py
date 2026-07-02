@@ -51,6 +51,8 @@ ROI_FIELD_QUESTIONS: dict[str, str] = {
     "S": "What share of their freight is spot versus contracted?",
     "Du": "What percentage of detention is currently not getting billed or collected?",
     "P": "How many office or dispatch staff work on this workflow?",
+    "R": "What is their average revenue per load?",
+    "minutes_per_order": "About how many minutes does manual order entry take per load?",
 }
 
 
@@ -190,6 +192,8 @@ def _field_label(field: str) -> str:
         "S": "spot mix",
         "Du": "detention uncaptured percentage",
         "P": "office/dispatch staff",
+        "R": "average revenue per load",
+        "minutes_per_order": "minutes per order entry",
     }.get(field, field)
 
 
@@ -217,13 +221,19 @@ def _parse_yes_no(transcript: str) -> bool | None:
 def _format_default_value(field: str, value: float) -> str:
     if field in {"S", "Du"}:
         return f"{round(value * 100, 1):g}%"
+    if field == "R":
+        return f"${value:,.0f}"
     if float(value).is_integer():
         return str(int(value))
     return f"{value:.2f}"
 
 
 def _numeric_fields_from_required(required_fields: list[str]) -> list[str]:
-    return [field for field in required_fields if field in {"T", "Ld", "S", "Du", "P"}]
+    return [
+        field
+        for field in required_fields
+        if field in {"T", "Ld", "S", "Du", "P", "R", "minutes_per_order"}
+    ]
 
 
 def _next_missing_numeric_field(session: JuliaROICollectionSession) -> str | None:
@@ -235,7 +245,7 @@ def _next_missing_numeric_field(session: JuliaROICollectionSession) -> str | Non
 
 
 def _is_defaultable_field(field: str) -> bool:
-    return field in {"S", "P", "Ld", "Du"}
+    return field in {"S", "P", "Ld", "Du", "R"}
 
 
 def _resolved_input_from_followup_result(
@@ -269,6 +279,18 @@ def _resolved_input_from_followup_result(
             raise ValueError(
                 f"Loads per day is too high versus fleet size. Maximum accepted is T × 10 ({t_value.value * 10:g})."
             )
+        return JuliaResolvedInput(value=float(value), source="rep", confidence=confidence)
+    if field == "R":
+        if value is None:
+            raise ValueError("Average revenue per load is missing.")
+        if value <= 0:
+            raise ValueError("Average revenue per load must be greater than 0.")
+        return JuliaResolvedInput(value=float(value), source="rep", confidence=confidence)
+    if field == "minutes_per_order":
+        if value is None:
+            raise ValueError("Minutes per order entry value is missing.")
+        if value <= 0:
+            raise ValueError("Minutes per order entry must be greater than 0.")
         return JuliaResolvedInput(value=float(value), source="rep", confidence=confidence)
     if field in {"S", "Du"}:
         if value is not None:
@@ -638,7 +660,17 @@ async def voice_roi_followup(
     _user: Annotated[DashboardUser, Depends(require_dashboard_user)],
 ) -> JuliaVoiceIntentResponse | JSONResponse:
     """Handle guided ROI follow-up answers for company, pain points, and numeric fields."""
-    allowed_fields = {"company_name", "pain_points", "T", "Ld", "S", "Du", "P"}
+    allowed_fields = {
+        "company_name",
+        "pain_points",
+        "T",
+        "Ld",
+        "S",
+        "Du",
+        "P",
+        "R",
+        "minutes_per_order",
+    }
     if expected_field not in allowed_fields:
         return _julia_error(
             422,
@@ -829,7 +861,7 @@ async def voice_roi_followup(
             stage="numeric_fields",
         )
 
-    if expected_field not in {"T", "Ld", "S", "Du", "P"}:
+    if expected_field not in {"T", "Ld", "S", "Du", "P", "R", "minutes_per_order"}:
         return _julia_error(422, "invalid_expected_field", "Follow-up field is not numeric.")
 
     if session_state.pending_default_field == expected_field:
