@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 type OrbMode = "idle" | "listening" | "processing" | "dimmed" | "alert";
 
@@ -40,12 +40,15 @@ export function ParticleOrb({
 }: ParticleOrbProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const rafRef = useRef<number | null>(null);
+  const revealTimeoutRef = useRef<number | null>(null);
   const modeRef = useRef<OrbMode>(mode);
+  const previousModeRef = useRef<OrbMode>(mode);
   const amplitudeValueRef = useRef<number>(amplitude);
   const externalAmplitudeRef = useRef<{ current: number } | null>(externalAmplitudeSource ?? null);
   const pointsRef = useRef<OrbPoint[]>([]);
   const noiseRef = useRef<(x: number, y: number, z: number) => number>(() => 0);
   const phaseRef = useRef(0);
+  const [isRevealed, setIsRevealed] = useState(false);
   const visualRef = useRef({
     speed: 0.0026,
     noiseAmp: 0.3,
@@ -55,9 +58,40 @@ export function ParticleOrb({
     opacity: 1,
   });
 
+  const triggerReveal = useCallback(() => {
+    setIsRevealed(false);
+    if (revealTimeoutRef.current !== null) {
+      window.clearTimeout(revealTimeoutRef.current);
+      revealTimeoutRef.current = null;
+    }
+    revealTimeoutRef.current = window.setTimeout(() => {
+      setIsRevealed(true);
+      revealTimeoutRef.current = null;
+    }, 20);
+  }, []);
+
   useEffect(() => {
+    if (typeof window === "undefined") {
+      setIsRevealed(true);
+      return;
+    }
+    triggerReveal();
+    return () => {
+      if (revealTimeoutRef.current !== null) {
+        window.clearTimeout(revealTimeoutRef.current);
+        revealTimeoutRef.current = null;
+      }
+    };
+  }, [triggerReveal]);
+
+  useEffect(() => {
+    const previousMode = previousModeRef.current;
+    previousModeRef.current = mode;
     modeRef.current = mode;
-  }, [mode]);
+    if (previousMode === "dimmed" && mode !== "dimmed") {
+      triggerReveal();
+    }
+  }, [mode, triggerReveal]);
 
   useEffect(() => {
     amplitudeValueRef.current = clamp01(amplitude);
@@ -175,17 +209,25 @@ export function ParticleOrb({
   }, [size]);
 
   return (
-    <button
-      type="button"
-      className={className}
-      onClick={onClick}
-      aria-label={mode === "listening" ? "Stop listening" : "Start listening"}
-      aria-disabled={disabled}
-      disabled={disabled}
-      style={{ opacity: mode === "dimmed" ? 0.35 : 1 }}
+    <div
+      style={{
+        opacity: isRevealed ? 1 : 0.1,
+        transform: isRevealed ? "scale(1)" : "scale(0.94)",
+        transition: "opacity 400ms cubic-bezier(0.22, 1, 0.36, 1), transform 400ms cubic-bezier(0.22, 1, 0.36, 1)",
+      }}
     >
-      <canvas ref={canvasRef} />
-    </button>
+      <button
+        type="button"
+        className={className}
+        onClick={onClick}
+        aria-label={mode === "listening" ? "Stop listening" : "Start listening"}
+        aria-disabled={disabled}
+        disabled={disabled}
+        style={{ opacity: mode === "dimmed" ? 0.35 : 1 }}
+      >
+        <canvas ref={canvasRef} />
+      </button>
+    </div>
   );
 }
 

@@ -564,15 +564,6 @@
   text-align: center;
 }
 
-.demoQuestionSubtle {
-  max-width: min(680px, calc(100vw - 40px));
-  color: rgba(255, 255, 255, 0.72);
-  font-size: 15px;
-  font-weight: 560;
-  line-height: 1.45;
-  text-align: center;
-}
-
 .demoHint {
   max-width: min(680px, calc(100vw - 40px));
   color: rgba(255, 255, 255, 0.66);
@@ -1159,38 +1150,6 @@
   line-height: 1.45;
 }
 
-.juliaToast {
-  position: absolute;
-  right: 24px;
-  bottom: 24px;
-  z-index: 8;
-  max-width: min(420px, calc(100vw - 48px));
-  min-height: 44px;
-  border: 1px solid rgba(248, 113, 113, 0.45);
-  border-radius: 8px;
-  background: #2b1216;
-  color: #fecaca;
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 10px 10px 10px 14px;
-  font-size: 13px;
-  font-weight: 700;
-}
-
-.juliaToastClose {
-  width: 28px;
-  height: 28px;
-  border: 0;
-  border-radius: 6px;
-  background: rgba(255, 255, 255, 0.08);
-  color: #ffffff;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-}
-
 .roiPendingToast {
   position: absolute;
   right: 24px;
@@ -1315,10 +1274,6 @@
   .captionsLine {
     font-size: 11px;
     max-width: calc(100vw - 34px);
-  }
-
-  .demoQuestionSubtle {
-    font-size: 14px;
   }
 
   .demoHint {
