@@ -34,16 +34,24 @@ export function HubLayout({
     <main className={s.main}>
       <section className={s.headerBand}>
         <div>
-          <div className={s.eyebrow}>Julia Documents</div>
-          <h1 className={s.title}>Sales document hub</h1>
+          <div className={s.eyebrow}>Documents // ROI Analysis</div>
+          <h1 className={s.title}>Julia</h1>
         </div>
         <div className={s.headerActions}>
           <DemoLaunchButton />
-          <button type="button" className={s.secondaryButton} onClick={onRefresh}>
+          <button
+            type="button"
+            className={s.secondaryButton}
+            onClick={onRefresh}
+          >
             <RefreshCw size={16} strokeWidth={1.8} />
             <span>Refresh</span>
           </button>
-          <button type="button" className={s.primaryButton} onClick={onOpenUpload}>
+          <button
+            type="button"
+            className={s.primaryButton}
+            onClick={onOpenUpload}
+          >
             <FilePlus2 size={16} strokeWidth={1.8} />
             <span>Upload</span>
           </button>
@@ -51,7 +59,11 @@ export function HubLayout({
       </section>
 
       <section className={s.toolbarBand}>
-        <div className={s.segmented} role="tablist" aria-label="Document status">
+        <div
+          className={s.segmented}
+          role="tablist"
+          aria-label="Document status"
+        >
           {filters.map((filter) => (
             <button
               key={filter.value}
