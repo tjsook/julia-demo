@@ -1,11 +1,13 @@
-import { X } from "lucide-react";
+import { Clock3, DollarSign, Package, Percent, Truck, Users, X, type LucideIcon } from "lucide-react";
 import { useEffect } from "react";
 
 import {
   SUB_SHARE_PARENT,
+  type JuliaROIInputSymbol,
   type JuliaROIAnalysisPayload,
   type JuliaROIInputSource,
   type JuliaROIPainPointMatch,
+  type JuliaROIResolvedInput,
 } from "../../../lib/julia/types";
 import s from "../../../styles/julia.module.css";
 import { RoiHonestyMarkers } from "./RoiHonestyMarkers";
@@ -16,17 +18,18 @@ type RoiReportModalProps = {
 };
 
 const INPUT_ROWS: Array<{
-  key: keyof JuliaROIAnalysisPayload["inputs"];
+  key: JuliaROIInputSymbol;
   label: string;
-  format: "count" | "percent" | "currency" | "decimal";
+  format: "count" | "percent" | "currency" | "decimal" | "minutes";
+  icon: typeof Truck;
 }> = [
-  { key: "T", label: "Trucks (T)", format: "count" },
-  { key: "S", label: "% Spot (S)", format: "percent" },
-  { key: "P", label: "Office people (P)", format: "count" },
-  { key: "Ld", label: "Loads / day (Ld)", format: "count" },
-  { key: "Du", label: "% Detention uncaptured", format: "percent" },
-  { key: "R", label: "Revenue / load (R)", format: "currency" },
-  { key: "minutes_per_order", label: "Minutes / order entry", format: "decimal" },
+  { key: "T", label: "Trucks", format: "count", icon: Truck },
+  { key: "Ld", label: "Loads / day", format: "decimal", icon: Package },
+  { key: "Du", label: "% Detention uncaptured", format: "percent", icon: Clock3 },
+  { key: "R", label: "Revenue / load", format: "currency", icon: DollarSign },
+  { key: "minutes_per_order", label: "Minutes / order entry", format: "minutes", icon: Clock3 },
+  { key: "S", label: "% Spot", format: "percent", icon: Percent },
+  { key: "P", label: "Office people", format: "count", icon: Users },
 ];
 
 export function RoiReportModal({ payload, onClose }: RoiReportModalProps) {
@@ -47,14 +50,27 @@ export function RoiReportModal({ payload, onClose }: RoiReportModalProps) {
 
   const title = payload.company_name ? `${payload.company_name} — ROI Analysis` : "ROI Analysis";
   const painRows = buildPainPointRows(payload.matched_pain_points);
+  const valueDrivers = [...payload.equations]
+    .filter((equation) => equation.result > 0)
+    .sort((left, right) => right.result - left.result);
+  const populatedInputs = INPUT_ROWS
+    .map((row) => {
+      const input = payload.inputs[row.key];
+      if (!input) return null;
+      return { ...row, input };
+    })
+    .filter((row): row is InputRowDisplay => row !== null);
 
   return (
     <section className={s.roiModal} aria-label={title}>
       <div className={s.roiPanel}>
         <div className={s.roiTopbar}>
-          <div>
-            <div className={s.roiEyebrow}>Julia report</div>
-            <h1>{title}</h1>
+          <div className={s.roiTitleWrap}>
+            <img src="/hemut-logo.png" alt="Hemut logo" className={s.roiLogo} />
+            <div>
+              <div className={s.roiEyebrow}>Julia report</div>
+              <h1>{title}</h1>
+            </div>
           </div>
           <button type="button" className={s.documentModalClose} onClick={onClose} aria-label="Close">
             <X size={18} strokeWidth={1.8} />
@@ -62,62 +78,79 @@ export function RoiReportModal({ payload, onClose }: RoiReportModalProps) {
         </div>
 
         <div className={s.roiBody}>
-          <section className={s.roiSection}>
-            <h2>Pain points detected</h2>
-            {painRows.length === 0 ? (
-              <p className={s.roiEmptyState}>I caught the inputs but no clear pain points were mentioned.</p>
-            ) : (
-              <ul className={s.roiPainList}>
-                {painRows.map((row) => (
-                  <li key={row.key}>
-                    <span className={row.isSubShare ? s.roiPainSubLabel : s.roiPainLabel}>
-                      {row.isSubShare ? "↳ " : ""}
-                      {painPointLabel(row.id)}
-                    </span>
-                    <span className={s.roiPainConfidence}>{Math.round(row.confidence * 100)}%</span>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </section>
-
-          <section className={s.roiSection}>
-            <h2>Inputs</h2>
-            <ul className={s.roiInputList}>
-              {INPUT_ROWS.map((row) => {
-                const input = payload.inputs[row.key];
-                return (
-                  <li key={row.key}>
-                    <span>{row.label}</span>
-                    <span>{input ? formatInputValue(input.value, row.format) : "—"}</span>
-                    <span className={s.roiInputSource}>{describeSource(input?.source)}</span>
-                  </li>
-                );
-              })}
-            </ul>
-          </section>
-
-          <section className={s.roiSection}>
-            <h2>Annual value drivers</h2>
-            {payload.equations.length === 0 ? (
-              <p className={s.roiEmptyState}>No equations selected because no pain points passed thresholds.</p>
-            ) : (
-              <ul className={s.roiValueList}>
-                {payload.equations.map((equation) => (
-                  <li key={equation.id}>
-                    <span>{equation.label}</span>
-                    <span>{formatCurrency(equation.result)}</span>
-                  </li>
-                ))}
-              </ul>
-            )}
-            <div className={s.roiSummary}>
-              <div>
-                <span>Annual value</span>
-                <span>{formatCurrency(payload.summary.annual_value)}</span>
-              </div>
+          <section className={s.roiHero}>
+            <div className={s.roiHeroValueBlock}>
+              <div className={s.roiHeroEyebrow}>Projected annual value</div>
+              <div className={s.roiHeroValue}>{formatCurrency(payload.summary.annual_value)}</div>
+              <p>Net operational recovery over a 12-month period.</p>
+            </div>
+            <div className={s.roiHeroDrivers}>
+              <div className={s.roiHeroDriversTitle}>Value drivers</div>
+              {valueDrivers.length === 0 ? (
+                <p className={s.roiHeroEmpty}>No positive value drivers yet.</p>
+              ) : (
+                <ul className={s.roiDriverList}>
+                  {valueDrivers.map((equation) => (
+                    <li key={equation.id}>
+                      <span>{equation.label}</span>
+                      <span>{formatCurrency(equation.result)}</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
             </div>
           </section>
+
+          <div className={s.roiLowerGrid}>
+            <section className={s.roiSection}>
+              <h2>Pain points detected</h2>
+              {painRows.length === 0 ? (
+                <p className={s.roiEmptyState}>I caught the inputs but no clear pain points were mentioned.</p>
+              ) : (
+                <ul className={s.roiPainList}>
+                  {painRows.map((row) => {
+                    const confidencePercent = Math.round(row.confidence * 100);
+                    return (
+                      <li key={row.key}>
+                        <div className={s.roiPainRowHead}>
+                          <span className={row.isSubShare ? s.roiPainSubLabel : s.roiPainLabel}>
+                            {row.isSubShare ? "↳ " : ""}
+                            {painPointLabel(row.id)}
+                          </span>
+                          <span className={s.roiPainConfidence}>{confidencePercent}%</span>
+                        </div>
+                        <div className={s.roiPainBarTrack}>
+                          <div className={s.roiPainBarFill} style={{ width: `${Math.max(6, confidencePercent)}%` }} />
+                        </div>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </section>
+
+            <section className={s.roiSection}>
+              <h2>Model inputs</h2>
+              {populatedInputs.length === 0 ? (
+                <p className={s.roiEmptyState}>No model inputs were captured.</p>
+              ) : (
+                <ul className={s.roiInputList}>
+                  {populatedInputs.map((row) => (
+                    <li key={row.key}>
+                      <span className={s.roiInputLabel}>
+                        <span className={s.roiInputIcon}>
+                          <row.icon size={15} strokeWidth={1.8} />
+                        </span>
+                        <span>{row.label}</span>
+                      </span>
+                      <span>{formatInputValue(row.input.value, row.format)}</span>
+                      <span className={s.roiInputSource}>{describeSource(row.input.source)}</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </section>
+          </div>
 
           <RoiHonestyMarkers markers={payload.honesty_markers} />
         </div>
@@ -134,7 +167,13 @@ function formatCurrency(value: number): string {
   }).format(value);
 }
 
-function formatInputValue(value: number, mode: "count" | "percent" | "currency" | "decimal"): string {
+function formatInputValue(
+  value: number,
+  mode: "count" | "percent" | "currency" | "decimal" | "minutes",
+): string {
+  if (mode === "minutes") {
+    return `${new Intl.NumberFormat("en-US", { maximumFractionDigits: 2 }).format(value)} min`;
+  }
   if (mode === "percent") {
     return `${Math.round(value * 100)}%`;
   }
@@ -155,6 +194,14 @@ function describeSource(source: JuliaROIInputSource | undefined): string {
   if (source === "derived") return "derived from T";
   return "default";
 }
+
+type InputRowDisplay = {
+  key: JuliaROIInputSymbol;
+  label: string;
+  format: "count" | "percent" | "currency" | "decimal" | "minutes";
+  icon: LucideIcon;
+  input: JuliaROIResolvedInput;
+};
 
 function painPointLabel(id: string): string {
   const labels: Record<string, string> = {

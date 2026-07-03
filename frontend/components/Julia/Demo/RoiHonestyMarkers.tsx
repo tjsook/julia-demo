@@ -20,7 +20,7 @@ export function RoiHonestyMarkers({ markers }: RoiHonestyMarkersProps) {
         aria-expanded={expanded}
         onClick={() => setExpanded((value) => !value)}
       >
-        <span>See honesty markers</span>
+        <span>Honesty markers</span>
         {expanded ? <ChevronUp size={16} strokeWidth={1.8} /> : <ChevronDown size={16} strokeWidth={1.8} />}
       </button>
       {expanded && (
