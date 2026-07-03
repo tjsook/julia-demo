@@ -323,7 +323,7 @@ export function useJuliaDemo() {
       setTtsPlayback(
         playbackFromResponse(response, ["asking-initial-intent"], {
           subtitleText: wasCancelTranscript
-            ? "Okay, cancelled. What can I do for you today?"
+            ? "Okay! Click the orb again if you have any other requests"
             : "What can I do for you today?",
         }),
       );

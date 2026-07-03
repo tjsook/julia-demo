@@ -44,7 +44,7 @@ NO_MATCH_TTS_TEXT = "I could not find that. Narrow down your query."
 ROI_COMPANY_QUESTION_TEXT = "Which company is this for?"
 ROI_PAIN_POINTS_QUESTION_TEXT = "What pain points did you identify in their office or operation?"
 INITIAL_GREETING_TEMPLATE = "Hey {name}, what can I do for you today?"
-CANCEL_TTS_TEXT = "Okay, cancelled. What can I do for you today?"
+CANCEL_TTS_TEXT = "Okay! Click the orb again if you have any other requests"
 EXPLICIT_CANCEL_PHRASES = (
     "cancel that",
     "never mind",
