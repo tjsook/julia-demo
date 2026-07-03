@@ -1011,16 +1011,19 @@
   align-items: center;
   justify-content: center;
   padding: 24px;
-  background: rgba(10, 11, 13, 0.84);
+  background:
+    radial-gradient(920px 460px at 80% -8%, rgba(255, 211, 59, 0.06), transparent 60%),
+    radial-gradient(760px 460px at 8% 108%, rgba(30, 90, 78, 0.1), transparent 62%),
+    rgba(5, 5, 6, 0.96);
 }
 
 .roiPanel {
-  width: min(880px, calc(100vw - 48px));
+  width: min(840px, calc(100vw - 48px));
   max-height: calc(100vh - 48px);
-  border: 1px solid rgba(255, 255, 255, 0.18);
-  border-radius: 10px;
-  background: #17191f;
-  box-shadow: 0 28px 80px rgba(0, 0, 0, 0.45);
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 18px;
+  background: #0b0c0f;
+  box-shadow: 0 30px 70px -30px rgba(0, 0, 0, 0.8);
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -1028,202 +1031,311 @@
 
 .roiTopbar {
   min-height: 72px;
-  padding: 16px 22px;
+  padding: 20px 28px;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+.roiTitleWrap {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.roiLogo {
+  height: 22px;
+  width: auto;
+  flex: none;
 }
 
 .roiTopbar h1 {
-  font-size: 18px;
+  font-size: 22px;
   line-height: 1.2;
-  font-weight: 760;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+  color: #f2f3f5;
 }
 
 .roiEyebrow {
-  margin-bottom: 4px;
-  color: rgba(255, 255, 255, 0.55);
-  font-size: 11px;
-  font-weight: 800;
-  letter-spacing: 0.08em;
+  margin-bottom: 6px;
+  color: #6c6f77;
+  font-size: 10.5px;
+  font-weight: 780;
+  letter-spacing: 0.16em;
   text-transform: uppercase;
 }
 
 .roiBody {
   overflow: auto;
-  padding: 20px 22px 22px;
+  padding: 26px 28px 22px;
   display: flex;
   flex-direction: column;
   gap: 16px;
 }
 
+.roiHero {
+  display: grid;
+  grid-template-columns: 1fr 292px;
+  border: 1px solid rgba(255, 211, 59, 0.42);
+  border-radius: 14px;
+  background: rgba(255, 211, 59, 0.045);
+  box-shadow: 0 0 50px -14px rgba(255, 211, 59, 0.28), inset 0 0 40px -28px rgba(255, 211, 59, 0.5);
+  overflow: hidden;
+}
+
+.roiHeroValueBlock {
+  padding: 28px 30px;
+}
+
+.roiHeroEyebrow {
+  margin-bottom: 16px;
+  color: #c6a544;
+  font-size: 11px;
+  font-weight: 760;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+}
+
+.roiHeroValue {
+  color: #ffd33b;
+  font-size: clamp(44px, 8vw, 70px);
+  line-height: 0.94;
+  letter-spacing: -0.04em;
+  font-weight: 760;
+  font-variant-numeric: tabular-nums;
+}
+
+.roiHeroValueBlock p {
+  margin-top: 14px;
+  color: #9a8b52;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.roiHeroDrivers {
+  border-left: 1px solid rgba(255, 211, 59, 0.22);
+  padding: 24px 26px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 12px;
+}
+
+.roiHeroDriversTitle {
+  color: #8c7a3e;
+  font-size: 10px;
+  font-weight: 760;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.roiHeroEmpty {
+  color: rgba(242, 243, 245, 0.75);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.roiDriverList {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.roiDriverList li {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.roiDriverList li > span:first-child {
+  color: #e4e2d6;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.roiDriverList li > span:last-child {
+  color: #f2f3f5;
+  font-size: 14px;
+  font-weight: 720;
+  font-variant-numeric: tabular-nums;
+}
+
+.roiLowerGrid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 16px;
+}
+
 .roiSection {
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 8px;
-  padding: 14px 16px;
-  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 12px;
+  padding: 20px 22px;
+  background: rgba(255, 255, 255, 0.015);
+  background-image: repeating-linear-gradient(
+    45deg,
+    rgba(255, 255, 255, 0.022) 0 1px,
+    transparent 1px 8px
+  );
 }
 
 .roiSection h2 {
-  margin-bottom: 10px;
-  font-size: 13px;
-  font-weight: 780;
-  letter-spacing: 0.05em;
+  margin-bottom: 16px;
+  font-size: 10px;
+  font-weight: 760;
+  letter-spacing: 0.16em;
   text-transform: uppercase;
-  color: rgba(255, 255, 255, 0.7);
+  color: #6c6f77;
 }
 
 .roiEmptyState {
-  color: rgba(255, 255, 255, 0.7);
+  color: rgba(230, 231, 234, 0.78);
   font-size: 13px;
   line-height: 1.5;
 }
 
 .roiPainList,
 .roiInputList,
-.roiValueList,
 .roiHonestyList {
   list-style: none;
   display: flex;
   flex-direction: column;
 }
 
-.roiPainList li,
-.roiValueList li {
-  min-height: 34px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+.roiPainList {
+  gap: 16px;
 }
 
-.roiPainList li:last-child,
-.roiValueList li:last-child {
-  border-bottom: 0;
+.roiPainRowHead {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 8px;
 }
 
 .roiPainLabel {
-  color: rgba(255, 255, 255, 0.88);
+  color: #e6e7ea;
   font-size: 14px;
-  font-weight: 720;
+  font-weight: 650;
 }
 
 .roiPainSubLabel {
-  color: rgba(255, 255, 255, 0.8);
+  color: rgba(230, 231, 234, 0.88);
   font-size: 13px;
-  font-weight: 690;
-  padding-left: 10px;
+  font-weight: 620;
 }
 
 .roiPainConfidence {
-  color: rgba(255, 255, 255, 0.62);
+  color: #9ea0a7;
   font-size: 12px;
-  font-weight: 760;
+  font-weight: 740;
+  font-variant-numeric: tabular-nums;
+}
+
+.roiPainBarTrack {
+  height: 4px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  overflow: hidden;
+}
+
+.roiPainBarFill {
+  height: 100%;
+  border-radius: 999px;
+  background: #ffd33b;
 }
 
 .roiInputList li {
-  min-height: 34px;
+  min-height: 40px;
   display: grid;
   grid-template-columns: 1fr auto auto;
   align-items: center;
   gap: 14px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  padding: 8px 0;
 }
 
 .roiInputList li:last-child {
   border-bottom: 0;
 }
 
-.roiInputList li > span:first-child {
-  color: rgba(255, 255, 255, 0.84);
+.roiInputLabel {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  color: #c7c9ce;
   font-size: 14px;
-  font-weight: 710;
+  font-weight: 620;
+}
+
+.roiInputIcon {
+  width: 28px;
+  height: 28px;
+  border-radius: 7px;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  background: rgba(255, 255, 255, 0.03);
+  color: #b9bbc1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
 }
 
 .roiInputList li > span:nth-child(2) {
-  color: #ffffff;
+  color: #f2f3f5;
   font-size: 14px;
-  font-weight: 780;
+  font-weight: 730;
+  font-variant-numeric: tabular-nums;
 }
 
 .roiInputSource {
-  color: rgba(255, 255, 255, 0.58);
-  font-size: 12px;
+  color: #6c6f77;
+  font-size: 11px;
   font-weight: 700;
-  text-transform: lowercase;
-}
-
-.roiValueList li > span:first-child {
-  color: rgba(255, 255, 255, 0.84);
-  font-size: 14px;
-  font-weight: 710;
-}
-
-.roiValueList li > span:last-child {
-  color: #ffffff;
-  font-size: 14px;
-  font-weight: 780;
-}
-
-.roiSummary {
-  margin-top: 12px;
-  border-top: 1px solid rgba(255, 255, 255, 0.18);
-  padding-top: 10px;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.roiSummary > div {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  color: rgba(255, 255, 255, 0.86);
-  font-size: 14px;
-  font-weight: 720;
-}
-
-.roiSummaryMultiple {
-  margin-top: 4px;
-  color: #f5c518 !important;
 }
 
 .roiHonestySection {
-  border: 1px solid rgba(245, 197, 24, 0.3);
-  border-radius: 8px;
-  background: rgba(245, 197, 24, 0.08);
+  border-top: 1px solid rgba(255, 255, 255, 0.07);
+  border-left: 0;
+  border-right: 0;
+  border-bottom: 0;
+  border-radius: 0;
+  background: transparent;
 }
 
 .roiHonestyToggle {
   width: 100%;
-  min-height: 42px;
+  min-height: 48px;
   border: 0;
   background: transparent;
-  color: rgba(255, 255, 255, 0.9);
+  color: #9ea0a7;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 10px;
-  padding: 0 14px;
+  padding: 0 2px;
   font-size: 13px;
-  font-weight: 730;
+  font-weight: 650;
   cursor: pointer;
 }
 
 .roiHonestyList {
-  border-top: 1px solid rgba(245, 197, 24, 0.25);
-  padding: 10px 14px 12px;
+  border-top: 1px solid rgba(255, 255, 255, 0.07);
+  padding: 10px 2px 12px;
   gap: 6px;
 }
 
 .roiHonestyList li {
-  color: rgba(255, 255, 255, 0.76);
+  color: #7c7e86;
   font-size: 12px;
-  line-height: 1.45;
+  line-height: 1.55;
 }
 
 .roiPendingToast {
@@ -1305,6 +1417,41 @@
   .roiPanel {
     width: calc(100vw - 32px);
     max-height: calc(100vh - 32px);
+  }
+
+  .roiTopbar {
+    padding: 16px 18px;
+    align-items: flex-start;
+  }
+
+  .roiTitleWrap {
+    align-items: flex-start;
+  }
+
+  .roiTopbar h1 {
+    font-size: 19px;
+  }
+
+  .roiBody {
+    padding: 16px 18px 18px;
+  }
+
+  .roiHero {
+    grid-template-columns: 1fr;
+  }
+
+  .roiHeroValueBlock {
+    padding: 20px 20px 16px;
+  }
+
+  .roiHeroDrivers {
+    border-left: 0;
+    border-top: 1px solid rgba(255, 211, 59, 0.22);
+    padding: 16px 20px 18px;
+  }
+
+  .roiLowerGrid {
+    grid-template-columns: 1fr;
   }
 
   .roiInputList li {
