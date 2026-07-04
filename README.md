@@ -1,4 +1,4 @@
-# Julia Demo
+# Julia 
 
 Standalone extraction of the Julia AI assistant from `Hemut's Diesel Dashboard`.
 Voice-driven ROI conversation + demo shell, without the surrounding dashboard.
