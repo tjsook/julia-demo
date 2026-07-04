@@ -30,8 +30,8 @@ _SPEECH_URL = f"{_OPENAI_BASE_URL}/audio/speech"
 _CHAT_COMPLETIONS_URL = f"{_OPENAI_BASE_URL}/chat/completions"
 _TTS_MIME_TYPE = "audio/mpeg"
 _WHISPER_PROMPT = (
-    "Hemut is a trucking technology company. "
-    "The rep is a Hemut salesperson speaking about a trucking prospect."
+    "The speaker is a salesperson describing a trucking-industry prospect. "
+    "Expect fleet metrics like number of trucks, loads per day, and detention hours."
 )
 
 logger = logging.getLogger(__name__)
@@ -123,7 +123,7 @@ class JuliaOpenAIService:
         transcript: str,
         calibration: JuliaCalibrationModel,
     ) -> str:
-        """Normalize known Hemut transcription variants in transcript text."""
+        """Normalize known company-name transcription variants in transcript text."""
         variants = calibration.brand_normalization.variants
         if not variants:
             return transcript

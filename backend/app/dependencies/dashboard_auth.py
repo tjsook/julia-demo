@@ -46,8 +46,12 @@ def require_dashboard_user(authorization: str = Header(default="")) -> Dashboard
     subject = str(payload.get("sub") or "")
     if not email or not subject:
         raise HTTPException(status_code=401, detail="Dashboard token missing subject or email.")
-    if not email.endswith("@hemut.com"):
-        raise HTTPException(status_code=403, detail="Dashboard email must use the hemut.com domain.")
+    required_domain = settings.DASHBOARD_ALLOWED_EMAIL_DOMAIN
+    if required_domain and not email.endswith(f"@{required_domain}"):
+        raise HTTPException(
+            status_code=403,
+            detail=f"Dashboard email must use the {required_domain} domain.",
+        )
 
     allowed_emails = settings.nextauth_allowed_emails_list
     if allowed_emails and email not in allowed_emails:

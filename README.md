@@ -62,6 +62,12 @@ npm run dev
 
 Open <http://localhost:3000> — it redirects to `/julia/demo`.
 
+## Rebranding for a new customer
+
+See [docs/CUSTOMIZATION.md](docs/CUSTOMIZATION.md) for the fill-in-the-blank
+checklist covering brand name, logo, calibration constants, and pain-point
+vocabulary.
+
 ## What still needs wiring for a real demo
 
 1. **NextAuth**: `frontend/pages/_app.tsx` still wraps in `SessionProvider`;

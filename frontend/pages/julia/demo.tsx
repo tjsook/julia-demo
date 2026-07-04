@@ -3,14 +3,16 @@ import Head from "next/head";
 import { DemoShell } from "../../components/Julia/Demo/DemoShell";
 import { JuliaDebugPanel } from "../../components/Julia/Demo/JuliaDebugPanel";
 import { useJuliaDemo } from "../../hooks/julia/useJuliaDemo";
+import { BRAND } from "../../lib/brand";
 
 export default function JuliaDemoPage() {
   const demo = useJuliaDemo();
+  const pageTitle = BRAND.name ? `${BRAND.productName} | ${BRAND.name}` : BRAND.productName;
 
   return (
     <>
       <Head>
-        <title>Julia Demo | GTM Dashboard</title>
+        <title>{pageTitle}</title>
       </Head>
       <DemoShell
         state={demo.state}

@@ -9,6 +9,7 @@ import {
   type JuliaROIPainPointMatch,
   type JuliaROIResolvedInput,
 } from "../../../lib/julia/types";
+import { BRAND } from "../../../lib/brand";
 import s from "../../../styles/julia.module.css";
 import { RoiHonestyMarkers } from "./RoiHonestyMarkers";
 
@@ -66,7 +67,9 @@ export function RoiReportModal({ payload, onClose }: RoiReportModalProps) {
       <div className={s.roiPanel}>
         <div className={s.roiTopbar}>
           <div className={s.roiTitleWrap}>
-            <img src="/hemut-logo.png" alt="Hemut logo" className={s.roiLogo} />
+            {BRAND.logoUrl && (
+              <img src={BRAND.logoUrl} alt={BRAND.name ? `${BRAND.name} logo` : "Brand logo"} className={s.roiLogo} />
+            )}
             <div>
               <div className={s.roiEyebrow}>Julia report</div>
               <h1>{title}</h1>

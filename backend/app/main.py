@@ -23,7 +23,7 @@ from app.routers.julia_routes import router as julia_router
 
 
 def _demo_dashboard_user() -> DashboardUser:
-    return DashboardUser(subject="julia-demo", email="demo@hemut.com")
+    return DashboardUser(subject="julia-demo", email="demo@example.com")
 
 
 def create_app(root_path: str = "") -> FastAPI:
@@ -37,7 +37,7 @@ def create_app(root_path: str = "") -> FastAPI:
 
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=settings.CORS_ORIGINS or ["*"],
+        allow_origins=settings.cors_origins_list or ["*"],
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
