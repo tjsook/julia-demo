@@ -2,10 +2,8 @@ import { useEffect, useState } from "react";
 import type { MutableRefObject } from "react";
 
 import type { JuliaDemoState, JuliaTerminalRecognizedLine } from "../../../hooks/julia/useJuliaDemo";
-import type { JuliaROIAnalysisPayload, JuliaVoiceMatch } from "../../../lib/julia/types";
+import type { JuliaROIAnalysisPayload } from "../../../lib/julia/types";
 import s from "../../../styles/julia.module.css";
-import { DocumentModal } from "./DocumentModal";
-import { DocumentSelector } from "./DocumentSelector";
 import { OrbAlertDot } from "./OrbAlertDot";
 import { ParticleOrb } from "./ParticleOrb";
 import { RoiPendingInputToast } from "./RoiPendingInputToast";
@@ -14,11 +12,6 @@ import { RoiReportModal } from "./RoiReportModal";
 type DemoShellProps = {
   state: JuliaDemoState;
   errorToast: string | null;
-  activeMatch: JuliaVoiceMatch | null;
-  selectorMatches: JuliaVoiceMatch[];
-  documentUrl: string | null;
-  documentLoading: boolean;
-  documentError: string | null;
   roiPayload: JuliaROIAnalysisPayload | null;
   roiPendingDetail: string | null;
   micAmplitudeRef: MutableRefObject<number>;
@@ -33,7 +26,6 @@ type DemoShellProps = {
   requiredNumericCount: number;
   collectedNumericCount: number;
   onOrbClick: () => void;
-  onSelectMatch: (match: JuliaVoiceMatch) => void;
   onCloseForeground: () => void;
   onDismissError: () => void;
   onDismissRoiPending: () => void;
@@ -43,8 +35,6 @@ const statusLabel: Record<JuliaDemoState, string> = {
   idle: "Ready",
   listening: "Listening",
   processing: "Processing",
-  "showing-document": "Document",
-  "showing-selector": "Select document",
   "showing-roi-report": "ROI report",
   "asking-initial-intent": "Julia prompt",
   "collecting-company-name": "Company step",
@@ -57,11 +47,6 @@ const statusLabel: Record<JuliaDemoState, string> = {
 export function DemoShell({
   state,
   errorToast,
-  activeMatch,
-  selectorMatches,
-  documentUrl,
-  documentLoading,
-  documentError,
   roiPayload,
   roiPendingDetail,
   micAmplitudeRef,
@@ -76,7 +61,6 @@ export function DemoShell({
   requiredNumericCount,
   collectedNumericCount,
   onOrbClick,
-  onSelectMatch,
   onCloseForeground,
   onDismissError,
   onDismissRoiPending,
@@ -85,8 +69,6 @@ export function DemoShell({
   const isDebugMode = process.env.NEXT_PUBLIC_JULIA_DEBUG_MODE === "true";
   const interactionHint = isDebugMode ? hintTextForState(state) : null;
   const isDimmed =
-    state === "showing-document" ||
-    state === "showing-selector" ||
     state === "showing-roi-report" ||
     state === "playing-roi-question";
   const orbMode =
@@ -157,24 +139,6 @@ export function DemoShell({
           </section>
         )}
       </div>
-
-      {state === "showing-document" && (
-        <DocumentModal
-          document={activeMatch}
-          signedUrl={documentUrl}
-          loading={documentLoading}
-          error={documentError}
-          onClose={onCloseForeground}
-        />
-      )}
-
-      {state === "showing-selector" && (
-        <DocumentSelector
-          matches={selectorMatches}
-          onSelect={onSelectMatch}
-          onClose={onCloseForeground}
-        />
-      )}
 
       {state === "showing-roi-report" && (
         <RoiReportModal payload={roiPayload} onClose={onCloseForeground} />
@@ -276,8 +240,6 @@ function stateToConsoleMode(state: JuliaDemoState): string {
     idle: "ready",
     listening: "mic_live",
     processing: "reasoning",
-    "showing-document": "document_open",
-    "showing-selector": "selector_open",
     "showing-roi-report": "report_open",
     "asking-initial-intent": "boot_prompt",
     "collecting-company-name": "collect_company",

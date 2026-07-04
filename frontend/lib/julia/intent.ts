@@ -13,6 +13,5 @@ export function logSilentVoiceIntent(response: JuliaVoiceIntentResponse): void {
     event: "julia.intent.no_action",
     transcript: response.transcript,
     intent: response.intent,
-    match_count: response.matches.length,
   });
 }
