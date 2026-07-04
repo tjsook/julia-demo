@@ -311,21 +311,8 @@
     ]
   },
   "brand_normalization": {
-    "target": "Hemut",
-    "variants": [
-      "hemit",
-      "hemot",
-      "hemuth",
-      "hemmet",
-      "hemmit",
-      "hemmot",
-      "hammet",
-      "hammit",
-      "hemmut",
-      "hemmoth",
-      "hammot",
-      "hammoth"
-    ]
+    "target": "YOUR_COMPANY",
+    "variants": []
   },
   "extraction": {
     "numeric_confidence_threshold": 0.7
