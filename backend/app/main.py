@@ -1,132 +1,59 @@
-"""
-FastAPI entrypoint for the Diesel Dashboard Backend.
+"""Standalone Julia demo FastAPI app.
 
-Wires:
-- Settings + logging
-- CORS
-- Exception handlers (stable error envelope)
-- RequestID middleware
-- Routers (health, calculations, trips)
-- Lifespan hooks (init/close external clients)
+Slim boot shim for the extracted julia-demo repo. In the original
+diesel-dashboard this file wires ~18 routers; here we mount only the Julia
+router plus the minimum middleware needed for it to run.
 
-Run locally:
-    uvicorn app.main:app --reload --port 8000
+The dashboard_auth dependency (Google ID-token verification) is overridden
+with a demo stub so the API is usable without a real dashboard session.
+Restore the original dependency when integrating with a real auth backend.
 """
 
-import json
-from contextlib import asynccontextmanager
+from __future__ import annotations
+
+import logging
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.clients.eds_client import close_eds_client
-from app.clients.slack_client import close_slack_client
 from app.core.config import get_settings
 from app.core.errors import UnhandledExceptionMiddleware, register_exception_handlers
-from app.core.logging import configure_logging, get_logger
-from app.middleware.request_id import RequestIDMiddleware
-from app.routers import (
-    calculation_routes,
-    dashboard_preferences_routes,
-    fueling_routes,
-    health_routes,
-    internal_jobs,
-    mapping_review_routes,
-    program_metrics_routes,
-)
-from app.routers.affiliate_routes import router as affiliate_router
-from app.routers.banking_routes import router as banking_router
-from app.routers.clerk_webhooks import router as clerk_webhook_router
-from app.routers.commission_admin_routes import router as commission_admin_router
-from app.routers.commission_read_routes import router as commission_read_router
-from app.routers.docusign_webhooks import router as docusign_webhook_router
-from app.routers.event_routes import router as event_router
-from app.routers.fueling_attribution_routes import router as fueling_attribution_router
-from app.routers.hubspot_webhooks import router as hubspot_webhook_router
+from app.dependencies.dashboard_auth import DashboardUser, require_dashboard_user
 from app.routers.julia_routes import router as julia_router
-from app.routers.pipeline_health_routes import router as pipeline_health_router
-from app.routers.rep_performance_routes import router as rep_performance_router
-from app.routers.routing_audit_routes import router as routing_audit_router
-from app.routers.terms_routes import router as terms_router
-from app.routers.waitlist_routes import router as waitlist_router
-
-settings = get_settings()
-configure_logging(settings.LOG_LEVEL)
-logger = get_logger("diesel_dashboard_backend")
 
 
-@asynccontextmanager
-async def lifespan(_: FastAPI):
-    runtime_settings = get_settings()
-    logger.info("Starting %s (env=%s)", runtime_settings.APP_NAME, runtime_settings.APP_ENV)
-    logger.info(
-        json.dumps(
-            {
-                "event": "julia.config",
-                "JULIA_VOICE_AUDIO_MAX_MB": runtime_settings.JULIA_VOICE_AUDIO_MAX_MB,
-                "OPENAI_EXTRACTION_MODEL": runtime_settings.OPENAI_EXTRACTION_MODEL,
-                "OPENAI_INTENT_MODEL": runtime_settings.OPENAI_INTENT_MODEL,
-                "OPENAI_STT_MODEL": runtime_settings.OPENAI_STT_MODEL,
-                "OPENAI_TTS_MODEL": runtime_settings.OPENAI_TTS_MODEL,
-                "OPENAI_TTS_VOICE": runtime_settings.OPENAI_TTS_VOICE,
-            },
-            separators=(",", ":"),
-        )
-    )
-    yield
-    logger.info("Shutting down — closing external clients")
-    await close_eds_client()
-    await close_slack_client()
+def _demo_dashboard_user() -> DashboardUser:
+    return DashboardUser(subject="julia-demo", email="demo@hemut.com")
 
 
-def create_app(*, root_path: str = "") -> FastAPI:
-    """Build the FastAPI application for local or prefixed ASGI entrypoints."""
-    application = FastAPI(
-        title="Diesel Dashboard Backend",
-        description="APIs + calculations for the Hemut Diesel dashboard.",
-        version="0.1.0",
-        lifespan=lifespan,
-        root_path=root_path,
-    )
+def create_app(root_path: str = "") -> FastAPI:
+    settings = get_settings()
+    logging.basicConfig(level=logging.INFO)
 
-    application.add_middleware(
+    app = FastAPI(title="Julia Demo API", root_path=root_path)
+
+    app.add_middleware(UnhandledExceptionMiddleware)
+    register_exception_handlers(app)
+
+    app.add_middleware(
         CORSMiddleware,
-        allow_origins=settings.cors_origins_list,
-        allow_origin_regex=settings.CORS_ALLOW_ORIGIN_REGEX,
+        allow_origins=settings.CORS_ORIGINS or ["*"],
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
     )
-    # UnhandledExceptionMiddleware sits INSIDE CORSMiddleware so that even
-    # unexpected 500s get the Access-Control-Allow-Origin header. See errors.py.
-    application.add_middleware(UnhandledExceptionMiddleware)
-    application.add_middleware(RequestIDMiddleware)
 
-    register_exception_handlers(application)
+    app.include_router(julia_router)
 
-    application.include_router(health_routes.router)
-    application.include_router(calculation_routes.router)
-    application.include_router(internal_jobs.router)
-    application.include_router(fueling_routes.router)
-    application.include_router(program_metrics_routes.router)
-    application.include_router(mapping_review_routes.router)
-    application.include_router(hubspot_webhook_router)
-    application.include_router(pipeline_health_router)
-    application.include_router(rep_performance_router)
-    application.include_router(fueling_attribution_router)
-    application.include_router(event_router)
-    application.include_router(routing_audit_router)
-    application.include_router(docusign_webhook_router)
-    application.include_router(clerk_webhook_router)
-    application.include_router(affiliate_router)
-    application.include_router(terms_router)
-    application.include_router(banking_router)
-    application.include_router(commission_read_router)
-    application.include_router(waitlist_router)
-    application.include_router(commission_admin_router)
-    application.include_router(julia_router)
-    application.include_router(dashboard_preferences_routes.router)
-    return application
+    # Bypass Google-ID-token auth for the standalone demo. Remove this
+    # override to enforce real dashboard auth again.
+    app.dependency_overrides[require_dashboard_user] = _demo_dashboard_user
+
+    @app.get("/health")
+    def health() -> dict[str, str]:
+        return {"status": "ok"}
+
+    return app
 
 
 app = create_app()

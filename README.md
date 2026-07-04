@@ -1,34 +1,52 @@
-# diesel-dashboard
+# Julia Demo
 
-Hemut Diesel dashboard monorepo.
+Standalone extraction of the Julia AI assistant from `diesel-dashboard`.
+Voice-driven ROI conversation + demo shell, without the surrounding dashboard.
 
-This repository contains:
+Extracted with `git filter-repo` on 2026-07-03. Every Julia source file
+here is byte-for-byte the file from `diesel-dashboard`, with its full
+commit history preserved. Only two files were replaced with lean boot
+shims (both were app-shell glue, not Julia logic):
 
-- `frontend/`: Next.js dashboard UI
-- `backend/`: Python + FastAPI service for EDS polling, HubSpot sync ingestion, Supabase ingestion, derived metrics, and internal job endpoints
+- `backend/app/main.py` — original wired 18 routers; shim mounts only
+  `julia_router` and overrides `require_dashboard_user` with a demo stub
+  so the API works without a real dashboard session.
+- `frontend/pages/index.tsx` — original was the dashboard landing;
+  shim redirects `/` to `/julia/demo`.
 
-Supabase is the system of record. The frontend calls the backend over HTTP using `NEXT_PUBLIC_API_URL`.
+`frontend/pages/api/submit-ticket.ts` was deleted (non-Julia).
 
-## Docs
+## Layout
 
-- [Stack Overview](./STACK.md)
-- [Architecture](./ARCHITECTURE.md)
-- [Phased Delivery Plan](./PHASES.md)
-- [Data Contracts and Decisions](./DATA-CONTRACTS.md)
-- [Job Schedule](./SCHEDULE.md)
-- [ROI Demo Runbook](./docs/roi-demo.md)
+```
+frontend/          Next.js pages-router app
+  pages/julia/       demo page
+  components/Julia/  Demo + Hub components
+  hooks/julia/       useJuliaDemo, useJuliaVoice, useJuliaUpload, useJuliaDocuments
+  lib/julia/         api client, types, recorder, VAD wrapper, fillers, amplitude
+  styles/            julia.module.css + globals.css
+backend/
+  app/routers/       julia_routes.py
+  app/services/      julia_*.py (openai, roi engine, matcher, intent router, calibration, document)
+  app/schemas/       julia_models.py + julia_roi_models.py
+  app/repositories/  julia_document_repository.py (Supabase-backed)
+  app/data/julia/    calibration.json
+  app/core/          config, errors, julia_validation
+  app/dependencies/  dashboard_auth
+planning-docs-private/julia/    architecture docs (gitignored, retained on disk)
+```
 
-## Local Setup
-
-Fill in `.env.example` and copy it to `.env` or `.env.local`.
+## Running
 
 ### Backend
 
 ```bash
 cd backend
-python -m venv .venv
-source .venv/bin/activate
+python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
+export OPENAI_API_KEY=sk-...
+# Supabase envs are only needed if you exercise the document endpoints
+# (upload / signed URL / doc list). Pure voice-ROI flow doesn't require them.
 uvicorn app.main:app --reload --port 8000
 ```
 
@@ -37,77 +55,29 @@ uvicorn app.main:app --reload --port 8000
 ```bash
 cd frontend
 npm install
+# .env.local — point the frontend at your backend
+# NEXT_PUBLIC_JULIA_API_BASE=http://localhost:8000
 npm run dev
 ```
 
-## Git Hooks (Optional)
+Open <http://localhost:3000> — it redirects to `/julia/demo`.
 
-To auto-run Ruff fixes before every push:
+## What still needs wiring for a real demo
 
-```bash
-./scripts/install-git-hooks.sh
-```
+1. **NextAuth**: `frontend/pages/_app.tsx` still wraps in `SessionProvider`;
+   `useCurrentUser` reads `session.user.name/email`. Either configure NextAuth
+   with a provider, or replace `frontend/lib/auth.ts` with a hardcoded demo user.
+2. **OpenAI API key**: required for STT / LLM / TTS. Set in backend env.
+3. **Supabase**: only needed for Julia Hub (document upload + retrieval). The
+   voice → ROI flow works without it. `backend/app/repositories/julia_document_repository.py`
+   hits Supabase via `httpx`; leave the env vars unset and those endpoints will 500.
+4. **Auth dependency override**: the shim in `main.py` bypasses Google-ID-token
+   verification. Delete `app.dependency_overrides[require_dashboard_user]` when
+   plugging into a real auth flow.
 
-The pre-push hook runs:
+## History
 
-- `ruff check backend --fix`
-- `ruff check backend`
-
-If fixes are applied, push is blocked so you can review/stage/commit the changes first.
-
-## Database
-
-Apply all migrations in order (`001` through latest in `backend/migrations/`).
-Recent schema additions include:
-
-- HubSpot deal stage catalog + transitions (`009`, `010`, `011`)
-- Manual mapping persistence guardrails (`012`, `013`)
-- HubSpot calls ingestion tables (`014`)
-- Affiliate program: `affiliates` table, `accounts.referral_code/attributed_at`, `hubspot_contacts.referral_code` (`015`, `016`, `017`)
-- Affiliate payouts: `affiliate_payouts` table with reversal columns (`016`)
-
-## Current State
-
-EDS ingestion is implemented for the current polling scope. HubSpot sync ingestion is implemented as a periodic read model into Supabase for users, deals, companies, contacts, tasks, calls, and deal pipeline stage metadata.
-
-HubSpot sync entrypoints:
-
-- `/internal/jobs/poll-hubspot-users`
-- `/internal/jobs/poll-hubspot-deals`
-- `/internal/jobs/poll-hubspot-companies`
-- `/internal/jobs/poll-hubspot-contacts`
-- `/internal/jobs/poll-hubspot-tasks`
-- `/internal/jobs/poll-hubspot-calls`
-- `/internal/jobs/poll-hubspot-deal-pipelines`
-- `/internal/jobs/poll-hubspot-all`
-
-The dashboard should read HubSpot-derived state from the database, not live HubSpot API calls on page load. EDS-to-HubSpot mapping remains a separate Phase 1.4 track.
-
-## Affiliate Program
-
-See `planning-docs-private/AFFILIATE-PROGRAM-SPEC.md` for full spec.
-
-### How it works
-
-1. **DocuSign → affiliate row**: DocuSign Connect webhook (`POST /webhooks/docusign`) or 2×/day poll (`POST /internal/jobs/poll-docusign-affiliates`) syncs envelope status into `affiliates`. A 6-char referral code is generated on first insert.
-2. **Attribution**: The EDS↔HubSpot mapping reconciliation job reads `hubspot_contacts.referral_code` and writes it onto `accounts`. `attributed_at` is set only when the affiliate's contract is `completed`.
-3. **Qualification detection**: `POST /internal/jobs/detect-affiliate-qualifications` scans for attributed accounts with `total_gallons >= 1000` and no existing payout row, and inserts an `affiliate_payouts` row ($100 flat, `truck_count_snapshot=1`).
-4. **Payout admin**: The Affiliates UI lets staff confirm W-9 receipt, queue payouts for the monthly batch, mark paid, and reverse if needed. CSV export at `GET /affiliates/payouts/export.csv`.
-
-### Job endpoints (require `Authorization: Bearer <INTERNAL_JOB_TOKEN>`)
-
-- `POST /internal/jobs/poll-docusign-affiliates` — sync envelopes from DocuSign (use `?lookback_days=N`)
-- `POST /internal/jobs/detect-affiliate-qualifications` — create payout rows for newly qualified accounts
-
-### Webhook
-
-`POST /webhooks/docusign` — DocuSign Connect SIM endpoint. Verified via HMAC-SHA256 (`DOCUSIGN_CONNECT_HMAC_SECRET`). Configure in DocuSign Connect sandbox/prod admin pointing at the deployed backend URL.
-
-### Deferred / out of scope (v1)
-
-- SMS dispatch to affiliates (Twilio — phone stored, not used yet)
-- Actual ACH/wire execution — CSV export hands off to finance/QuickBooks
-- Auto-detection of account closure/chargeback/fraud for reversals (manual button only)
-- Dynamic truck count for payout calculation (hardcoded to 1 = $100 flat; see `affiliate_qualification_service.py`)
-- Affiliate-facing dashboard (`HemutDiesel_Affiliate` repo)
-- Admin "merge affiliates" for re-sends with a different email address
+Full git history for every Julia file is preserved. Look at
+`planning-docs-private/julia/` (on disk, gitignored) for the architecture
+docs behind each optimization pass (opt-1 through opt-4, plus the visual
+polish plan and other initiatives).
