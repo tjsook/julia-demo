@@ -3,6 +3,12 @@
 Standalone extraction of the Julia AI assistant from `Hemut's Diesel Dashboard`.
 Voice-driven ROI conversation + demo shell, without the surrounding dashboard.
 
+Julia is a ROI presentation assistant. She's powered by an OpenAI engine built on FastAPI and utilizes Pydantic-backed data normalization to converse with reps mid-pitch to create a structured output on how potential customers can benefit from services. She's designed to create a "wow" factor as well, so her "orb" is literally ~9000 points on a sphere using a golden-angle distribution, animated with distortion-seeded 3D noise.
+
+I built it to assist our sales operations in Hemut, so it's supposed to be niche and relative to our company. I had to perform a migration to rip it out of its GTM dashboard parent-entity (which I also built), for presentation purposes.
+
+The repo has been stripped down to a generic, blank yet customizable ROI-bot (given keys).
+
 Extracted with `git filter-repo` on 2026-07-03. Every Julia source file
 here is byte-for-byte the file from `diesel-dashboard`, with its full
 commit history preserved. Only two files were replaced with lean boot
