@@ -15,11 +15,6 @@ export default function JuliaDemoPage() {
       <DemoShell
         state={demo.state}
         errorToast={demo.errorToast}
-        activeMatch={demo.activeMatch}
-        selectorMatches={demo.selectorMatches}
-        documentUrl={demo.documentUrl}
-        documentLoading={demo.documentLoading}
-        documentError={demo.documentError}
         roiPayload={demo.roiPayload}
         roiPendingDetail={demo.roiPendingDetail}
         micAmplitudeRef={demo.micAmplitudeRef}
@@ -34,7 +29,6 @@ export default function JuliaDemoPage() {
         requiredNumericCount={demo.requiredNumericCount}
         collectedNumericCount={demo.collectedNumericCount}
         onOrbClick={demo.handleOrbClick}
-        onSelectMatch={(match) => void demo.openDocument(match)}
         onCloseForeground={demo.closeForeground}
         onDismissError={demo.dismissError}
         onDismissRoiPending={demo.dismissRoiPending}

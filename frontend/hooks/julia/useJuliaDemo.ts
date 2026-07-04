@@ -1,9 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import {
-  fetchJuliaSignedUrl,
   postJuliaRoiFollowup,
-  postJuliaVoiceDocumentConfirmation,
   postJuliaVoiceGreeting,
   postJuliaVoiceIntent,
 } from "../../lib/julia/api";
@@ -19,7 +17,6 @@ import type {
   JuliaROICollectionSession,
   JuliaROIPendingField,
   JuliaVoiceIntentResponse,
-  JuliaVoiceMatch,
   JuliaVoicePlaybackResponse,
 } from "../../lib/julia/types";
 import {
@@ -37,8 +34,6 @@ export type JuliaDemoState =
   | "playing-roi-question"
   | "listening"
   | "processing"
-  | "showing-document"
-  | "showing-selector"
   | "showing-roi-report"
   | "roi-pending-input";
 
@@ -80,11 +75,6 @@ type JuliaTtsPlayback = {
   subtitleText?: string | null;
 };
 
-type OpenDocumentOptions = {
-  playConfirmation?: boolean;
-  preservePlayback?: boolean;
-};
-
 const GREETING_PLAYBACK_CACHE = new Map<string, JuliaVoicePlaybackResponse>();
 const PROCESSING_SPLASH_BASE_LINES = [
   "await stt.normalize(transcript)",
@@ -101,7 +91,6 @@ const PROCESSING_SPLASH_BASE_LINES = [
 const PROCESSING_SPLASH_STAGE_LINES: Record<GuidedConversationStage, readonly string[]> = {
   initial_intent: [
     "intent = classify_intent(transcript)",
-    "if (intent == 'doc') search(active_documents)",
     "if (intent == 'roi') bootstrap(session)",
   ],
   company: [
@@ -141,16 +130,11 @@ export function useJuliaDemo() {
     useState<GuidedConversationStage>("initial_intent");
   const [expectedField, setExpectedField] = useState<JuliaROIPendingField | null>(null);
   const [errorToast, setErrorToast] = useState<string | null>(null);
-  const [activeMatch, setActiveMatch] = useState<JuliaVoiceMatch | null>(null);
-  const [selectorMatches, setSelectorMatches] = useState<JuliaVoiceMatch[]>([]);
   const [lastVoiceResponse, setLastVoiceResponse] = useState<JuliaVoiceIntentResponse | null>(null);
   const [ttsPlayback, setTtsPlayback] = useState<JuliaTtsPlayback | null>(null);
   const [activeSubtitleText, setActiveSubtitleText] = useState<string | null>(null);
   const [isStartupLocked, setIsStartupLocked] = useState(true);
   const [processingSplashIndex, setProcessingSplashIndex] = useState(0);
-  const [documentUrl, setDocumentUrl] = useState<string | null>(null);
-  const [documentLoading, setDocumentLoading] = useState(false);
-  const [documentError, setDocumentError] = useState<string | null>(null);
   const [roiPayload, setRoiPayload] = useState<JuliaROIAnalysisPayload | null>(null);
   const [roiPendingDetail, setRoiPendingDetail] = useState<string | null>(null);
   const [roiCollectionSession, setRoiCollectionSession] =
@@ -162,7 +146,6 @@ export function useJuliaDemo() {
   const [debugStageTranscripts, setDebugStageTranscripts] = useState<JuliaDebugStageTranscript[]>([]);
   const debugEntryIdRef = useRef(0);
   const startupEpochMsRef = useRef<number | null>(null);
-  const confirmationRequestRef = useRef(0);
   const hasPlayedGreetingRef = useRef(false);
   const micAmplitudeRef = useRef(0);
   const activeTtsAudioRef = useRef<HTMLAudioElement | null>(null);
@@ -195,50 +178,6 @@ export function useJuliaDemo() {
       });
     }
   }, [isDebugMode]);
-
-  const queueSelectedDocumentConfirmation = useCallback(async (match: JuliaVoiceMatch) => {
-    const requestId = confirmationRequestRef.current + 1;
-    confirmationRequestRef.current = requestId;
-
-    try {
-      const response = await postJuliaVoiceDocumentConfirmation(match.id);
-      if (confirmationRequestRef.current !== requestId) return;
-      setTtsPlayback(
-        playbackFromResponse(response, ["showing-document"], {
-          subtitleText: `Here's the ${match.title} document.`,
-        }),
-      );
-    } catch (err) {
-      console.log("julia.tts.selection_failed", {
-        event: "julia.tts.selection_failed",
-        doc_id: match.id,
-        error: err instanceof Error ? err.message : "Selected document voice response failed.",
-      });
-    }
-  }, []);
-
-  const openDocument = useCallback(async (match: JuliaVoiceMatch, options: OpenDocumentOptions = {}) => {
-    const playConfirmation = options.playConfirmation ?? true;
-    setActiveMatch(match);
-    setSelectorMatches([]);
-    if (!options.preservePlayback) setTtsPlayback(null);
-    setDocumentUrl(null);
-    setDocumentError(null);
-    setRoiPayload(null);
-    setRoiPendingDetail(null);
-    setDocumentLoading(true);
-    setState("showing-document");
-    if (playConfirmation) void queueSelectedDocumentConfirmation(match);
-
-    try {
-      const response = await fetchJuliaSignedUrl(match.id);
-      setDocumentUrl(response.signed_url);
-    } catch (err) {
-      setDocumentError(err instanceof Error ? err.message : "Failed to load document.");
-    } finally {
-      setDocumentLoading(false);
-    }
-  }, [queueSelectedDocumentConfirmation]);
 
   const resetRoiCollection = useCallback(() => {
     setConversationStage("initial_intent");
@@ -308,10 +247,6 @@ export function useJuliaDemo() {
       intent: response.intent,
     });
     setLastVoiceResponse(response);
-    setActiveMatch(null);
-    setSelectorMatches([]);
-    setDocumentUrl(null);
-    setDocumentError(null);
 
     if (isSilentVoiceIntent(response)) {
       const wasCancelTranscript = isCancelTranscript(response.transcript);
@@ -394,48 +329,23 @@ export function useJuliaDemo() {
       return;
     }
 
-    if (response.intent === "single_match" && response.matches[0]) {
-      resetRoiCollection();
-      setCurrentQuestionText(null);
-      const routePlayback = playbackFromResponse(response, ["showing-document"], {
-        subtitleText: `Here's the ${response.matches[0].title} document.`,
-      });
-      setTtsPlayback(routePlayback);
-      void openDocument(response.matches[0], {
-        playConfirmation: routePlayback === null,
-        preservePlayback: routePlayback !== null,
-      });
-      return;
-    }
-
-    if (response.intent === "multi_match") {
-      resetRoiCollection();
-      setCurrentQuestionText(null);
-      setTtsPlayback(
-        playbackFromResponse(response, ["showing-selector"], {
-          subtitleText: "I found multiple documents of that type. Which one do you want me to pull up?",
-        }),
-      );
-      setSelectorMatches(response.matches);
-      setState("showing-selector");
-      return;
-    }
-
-    if (response.intent === "no_match") {
-      resetRoiCollection();
-      setCurrentQuestionText(null);
-      setTtsPlayback(
-        playbackFromResponse(response, ["idle"], {
-          subtitleText: "I could not find that. Narrow down your query.",
-        }),
-      );
-      setState("idle");
-      return;
-    }
-
-    setTtsPlayback(null);
-    setState("idle");
-  }, [appendDebugStageTranscript, conversationStage, expectedField, openDocument, resetRoiCollection]);
+    // Unrecognized intent: short polite fallback, return to idle prompt.
+    console.log("julia.intent.unrecognized", {
+      event: "julia.intent.unrecognized",
+      transcript: response.transcript,
+      intent: response.intent,
+    });
+    resetRoiCollection();
+    setRoiPayload(null);
+    setRoiPendingDetail(null);
+    setCurrentQuestionText("What can I do for you today?");
+    setTtsPlayback(
+      playbackFromResponse(response, ["asking-initial-intent"], {
+        subtitleText: "Sorry, I didn't catch that. What can I do for you today?",
+      }),
+    );
+    setState("asking-initial-intent");
+  }, [appendDebugStageTranscript, conversationStage, expectedField, resetRoiCollection]);
 
   const handleError = useCallback((message: string) => {
     const friendlyMessage = formatVoiceError(message);
@@ -538,7 +448,6 @@ export function useJuliaDemo() {
 
   const cancelActiveWork = useCallback((message: string) => {
     cancelListening();
-    confirmationRequestRef.current += 1;
     stopAllPlayback();
     resetRoiCollection();
     setRoiPayload(null);
@@ -549,15 +458,9 @@ export function useJuliaDemo() {
   }, [cancelListening, resetRoiCollection, stopAllPlayback]);
 
   const closeForeground = useCallback(() => {
-    confirmationRequestRef.current += 1;
     setState("idle");
-    setActiveMatch(null);
-    setSelectorMatches([]);
     setLastVoiceResponse(null);
     setTtsPlayback(null);
-    setDocumentUrl(null);
-    setDocumentError(null);
-    setDocumentLoading(false);
     setRoiPayload(null);
     setCurrentQuestionText(null);
     setTerminalCancelMessage(null);
@@ -853,12 +756,7 @@ export function useJuliaDemo() {
   return {
     state,
     errorToast,
-    activeMatch,
-    selectorMatches,
     lastVoiceResponse,
-    documentUrl,
-    documentLoading,
-    documentError,
     roiPayload,
     roiPendingDetail,
     roiCollectionSession,
@@ -882,7 +780,6 @@ export function useJuliaDemo() {
     startupTimingMarks,
     debugStageTranscripts,
     handleOrbClick,
-    openDocument,
     cancelListening,
     cancelActiveWork,
     closeForeground,
