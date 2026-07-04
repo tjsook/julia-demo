@@ -1,6 +1,6 @@
 # Julia Demo
 
-Standalone extraction of the Julia AI assistant from `diesel-dashboard`.
+Standalone extraction of the Julia AI assistant from `Hemut's Diesel Dashboard`.
 Voice-driven ROI conversation + demo shell, without the surrounding dashboard.
 
 Extracted with `git filter-repo` on 2026-07-03. Every Julia source file
